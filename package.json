@@ -1,0 +1,57 @@
+{
+  "name": "textxform",
+  "version": "0.1.0",
+  "description": "Tiny JS library to convert Markdown ⇄ HTML ⇄ BBCode ⇄ Plaintext via a unified AST (safe HTML by default).",
+  "type": "module",
+  "license": "MIT",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsup src/index.js --format esm,cjs,iife --global-name textxform --minify --sourcemap --clean",
+    "dev": "tsup src/index.js --watch --format esm,cjs --sourcemap",
+    "test": "vitest run",
+    "coverage": "vitest run --coverage",
+    "lint": "eslint .",
+    "prettier": "prettier -c .",
+    "fix": "eslint . --fix && prettier -w .",
+    "size": "size-limit",
+    "check": "npm run lint && npm run test && npm run build && npm run size",
+    "prepare": "husky install"
+  },
+  "lint-staged": {
+    "*.{js,mjs,cjs,json,md}": [
+      "eslint --fix",
+      "prettier -w"
+    ]
+  },
+  "size-limit": [
+    {
+      "path": "dist/index.mjs",
+      "limit": "8 KB"
+    }
+  ],
+  "devDependencies": {
+    "@commitlint/cli": "^19.3.0",
+    "@commitlint/config-conventional": "^19.2.2",
+    "@eslint/js": "^9.9.0",
+    "@size-limit/preset-small-lib": "^11.1.4",
+    "@vitest/coverage-v8": "^3.2.4",
+    "eslint": "^9.9.0",
+    "husky": "^9.1.6",
+    "lint-staged": "^15.2.10",
+    "prettier": "^3.3.3",
+    "size-limit": "^11.1.4",
+    "tsup": "^8.2.4",
+    "vitest": "^3.2.4"
+  }
+}
