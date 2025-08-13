@@ -7,7 +7,7 @@
   "sideEffects": false,
   "exports": {
     ".": {
-      "import": "./dist/index.mjs",
+      "import": "./dist/index.js",
       "require": "./dist/index.cjs"
     }
   },
@@ -36,7 +36,7 @@
   },
   "size-limit": [
     {
-      "path": "dist/index.mjs",
+      "path": "dist/index.js",
       "limit": "8 KB"
     }
   ],
