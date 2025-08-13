@@ -13,14 +13,14 @@ const PARSERS = {
   markdown: parseMarkdown,
   bbcode: parseBBCode,
   html: parseHTML,
-  mixed: parsePlaintext // временно
+  mixed: parsePlaintext,
 };
 
 const RENDERERS = {
   plaintext: renderPlaintext,
   markdown: renderMarkdown,
   bbcode: renderBBCode,
-  html: renderHTML
+  html: renderHTML,
 };
 
 export function parse(input, { from = 'plaintext' } = {}) {
@@ -40,8 +40,6 @@ export function convert(input, { from = 'plaintext', to = 'html', ...opts } = {}
   return render(ast, { to, ...opts });
 }
 
-// Заглушка для будущих плагинов
 export function use(_plugin) {
-  // В v1 каркаса ничего не делаем
   return () => {};
 }

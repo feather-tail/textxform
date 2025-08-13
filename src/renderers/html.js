@@ -1,11 +1,52 @@
 import { visit } from '../core/visitor.js';
-import { escapeHtml } from '../core/utils.js';
+import * as U from '../core/utils.js';
 
-export function renderHTML(ast, _opts = {}) {
-  const handlers = {
-    Document: (node, _ctx, recur) => node.children.map(recur).join('\n'),
-    Paragraph: (node, _ctx, recur) => `<p>${node.children.map(recur).join('')}</p>`,
-    Text: (node) => escapeHtml(node.value ?? '')
+export function renderHTML(ast, opts = {}) {
+  const { safe = true } = opts;
+
+  const h = {
+    Document: (n, _c, r) => n.children.map(r).join('\n'),
+    Paragraph: (n, _c, r) => `<p>${n.children.map(r).join('')}</p>`,
+    Text: (n) => U.escapeHtml(n.value ?? ''),
+    Heading: (n) => {
+      const d = n.depth ?? 1;
+      return `<h${d}>${U.escapeHtml(n.value ?? '')}</h${d}>`;
+    },
+    ThematicBreak: () => `<hr/>`,
+    Strong: (n, _c, r) => `<strong>${n.children.map(r).join('')}</strong>`,
+    Emphasis: (n, _c, r) => `<em>${n.children.map(r).join('')}</em>`,
+    Underline: (n, _c, r) => `<u>${n.children.map(r).join('')}</u>`,
+    Strike: (n, _c, r) => `<s>${n.children.map(r).join('')}</s>`,
+    InlineCode: (n) => `<code>${U.escapeHtml(n.value ?? '')}</code>`,
+    CodeBlock: (n) => `<pre><code>${U.escapeHtml(n.value ?? '')}</code></pre>`,
+    LineBreak: () => `<br/>`,
+    Link: (n, _c, r) => {
+      const href = safe ? U.sanitizeUrl(n.href) : String(n.href || '');
+      const title = n.title ? ` title="${U.escapeAttr(n.title)}"` : '';
+      return `<a href="${U.escapeAttr(href)}"${title}>${n.children.map(r).join('')}</a>`;
+    },
+    Image: (n) => {
+      const src = safe ? U.sanitizeUrl(n.src) : String(n.src || '');
+      if (src === '#') return '';
+      const alt = n.alt ? ` alt="${U.escapeAttr(n.alt)}"` : ' alt=""';
+      return `<img src="${U.escapeAttr(src)}"${alt}>`;
+    },
+    Blockquote: (n, _c, r) => `<blockquote>${n.children.map(r).join('')}</blockquote>`,
+    Quote: (n, _c, r) => {
+      const a = n.author ? ` data-author="${U.escapeAttr(n.author)}"` : '';
+      return `<blockquote${a}>${n.children.map(r).join('')}</blockquote>`;
+    },
+    List: (n, _c, r) => {
+      const tag = n.ordered ? 'ol' : 'ul';
+      return `<${tag}>${n.children.map(r).join('')}</${tag}>`;
+    },
+    ListItem: (n, _c, r) => `<li>${n.children.map(r).join('')}</li>`,
+    Spoiler: (n, _c, r) => {
+      const summary = `<summary>${U.escapeHtml(n.label ?? 'Спойлер')}</summary>`;
+      return `<details>${summary}${n.children.map(r).join('')}</details>`;
+    },
+    __unknown: () => '',
   };
-  return visit(ast, handlers, {});
+
+  return visit(ast, h, {});
 }
