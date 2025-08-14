@@ -2,6 +2,7 @@ import js from '@eslint/js';
 
 export default [
   js.configs.recommended,
+
   { ignores: ['dist/**', 'coverage/**'] },
 
   {
@@ -17,7 +18,12 @@ export default [
   },
 
   {
-    files: ['bench/**/*.js', 'examples/**/*.js', 'tests/**/*.js', 'bin/**/*.mjs'],
+    files: [
+      'bench/**/*.{js,mjs}',
+      'examples/**/*.{js,mjs}',
+      'tests/**/*.{js,mjs}',
+      'bin/**/*.{js,mjs}',
+    ],
     languageOptions: {
       globals: { console: 'readonly', process: 'readonly' },
     },
