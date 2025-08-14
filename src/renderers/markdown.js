@@ -16,17 +16,30 @@ export function renderMarkdown(ast, _opts = {}) {
     LineBreak: () => '  \n',
     Link: (n, _c, r) => `[${n.children.map(r).join('')}](${n.href || '#'})`,
     Image: (n) => `![${n.alt || ''}](${n.src || ''})`,
-    Blockquote: (n, _c, r) => (n.children.map(r).join('\n')).split('\n').map(l => `> ${l}`).join('\n'),
-    Quote: (n, _c, r) => (n.children.map(r).join('\n')).split('\n').map(l => `> ${l}`).join('\n'),
+    Blockquote: (n, _c, r) =>
+      n.children
+        .map(r)
+        .join('\n')
+        .split('\n')
+        .map((l) => `> ${l}`)
+        .join('\n'),
+    Quote: (n, _c, r) =>
+      n.children
+        .map(r)
+        .join('\n')
+        .split('\n')
+        .map((l) => `> ${l}`)
+        .join('\n'),
     List: (n, _c, r) => {
-      return n.children.map((li, idx) => {
-        const rendered = r(li).replace(/\n/g, '\n   ');
-        return n.ordered ? `${idx + 1}. ${rendered}` : `- ${rendered}`;
-      }).join('\n');
+      const renderItem = (li) => r(li).replace(/\n/g, '\n   ');
+      if (n.ordered) {
+        return n.children.map((li) => `1. ${renderItem(li)}`).join('\n');
+      }
+      return n.children.map((li) => `- ${renderItem(li)}`).join('\n');
     },
     ListItem: (n, _c, r) => n.children.map(r).join(''),
     Spoiler: (n, _c, r) => `>! ${n.label ? n.label + ': ' : ''}${n.children.map(r).join('')}`,
-    __unknown: () => ''
+    __unknown: () => '',
   };
   return visit(ast, h, {});
 }

@@ -38,6 +38,23 @@ function findClosing(s, start, open = '[', close = ']') {
   return -1;
 }
 
+function findParenEnd(s, start) {
+  let depth = 0;
+  for (let i = start; i < s.length; i++) {
+    const ch = s[i];
+    if (ch === '\\') {
+      i++;
+      continue;
+    }
+    if (ch === '(') depth++;
+    else if (ch === ')') {
+      if (depth === 0) return i;
+      depth--;
+    }
+  }
+  return -1;
+}
+
 function parseInlines(s) {
   const out = [];
   let i = 0;
@@ -55,37 +72,38 @@ function parseInlines(s) {
       continue;
     }
 
-    // image ![alt](src)
+    // image ![alt](src[ "title"])
     if (s[i] === '!' && s[i + 1] === '[') {
       const altStart = i + 2;
       const altEnd = findClosing(s, altStart, '[', ']');
       if (altEnd !== -1 && s[altEnd + 1] === '(') {
         const urlStart = altEnd + 2;
-        const urlEnd = s.indexOf(')', urlStart);
+        const urlEnd = findParenEnd(s, urlStart);
         if (urlEnd !== -1) {
-          const alt = s.slice(altStart, altEnd);
-          const src = s
-            .slice(urlStart, urlEnd)
-            .trim()
-            .replace(/".*"$/, (m) => m.split(')')[0]);
-          out.push(image(src, alt));
+          const inside = s.slice(urlStart, urlEnd).trim();
+          const m = inside.match(/^(\S+)(?:\s+"([^"]+)")?$/);
+          const srcVal = m ? m[1] : inside;
+          const altVal = s.slice(altStart, altEnd);
+          out.push(image(srcVal, altVal));
           i = urlEnd + 1;
           continue;
         }
       }
     }
 
-    // link [text](href)
+    // link [text](href[ "title"])
     if (s[i] === '[') {
       const txtStart = i + 1;
       const txtEnd = findClosing(s, txtStart, '[', ']');
       if (txtEnd !== -1 && s[txtEnd + 1] === '(') {
         const urlStart = txtEnd + 2;
-        const urlEnd = s.indexOf(')', urlStart);
+        const urlEnd = findParenEnd(s, urlStart);
         if (urlEnd !== -1) {
+          const inside = s.slice(urlStart, urlEnd).trim();
+          const m = inside.match(/^(\S+)(?:\s+"([^"]+)")?$/);
+          const hrefVal = m ? m[1] : inside;
           const txt = s.slice(txtStart, txtEnd);
-          const href = s.slice(urlStart, urlEnd).trim().split(/\s+/)[0];
-          out.push(link(href, parseInlines(txt)));
+          out.push(link(hrefVal, parseInlines(txt)));
           i = urlEnd + 1;
           continue;
         }
@@ -163,6 +181,7 @@ function parseBlocks(src) {
       continue;
     }
 
+    // fenced code
     let m = line.match(/^ {0,3}(```|~~~)\s*([A-Za-z0-9_-]+)?\s*$/);
     if (m) {
       const fence = m[1];
