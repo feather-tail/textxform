@@ -27,7 +27,10 @@
     "size": "size-limit",
     "check": "npm run lint && npm run test && npm run build && npm run size",
     "prepare": "husky install",
-    "test:cov": "vitest run --coverage"
+    "test:cov": "vitest run --coverage",
+    "ex:quick": "node examples/quick-start.mjs",
+    "ex:api": "node examples/api-demo.mjs",
+    "cli": "node bin/textxform.mjs --help"
   },
   "lint-staged": {
     "*.{js,mjs,cjs,json,md}": [
