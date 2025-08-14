@@ -26,7 +26,8 @@
     "fix": "eslint . --fix && prettier -w .",
     "size": "size-limit",
     "check": "npm run lint && npm run test && npm run build && npm run size",
-    "prepare": "husky install"
+    "prepare": "husky install",
+    "test:cov": "vitest run --coverage"
   },
   "lint-staged": {
     "*.{js,mjs,cjs,json,md}": [
