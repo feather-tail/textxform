@@ -1,42 +1,33 @@
-import js from "@eslint/js";
+import js from '@eslint/js';
 
 export default [
-  // База
   js.configs.recommended,
+  { ignores: ['dist/**', 'coverage/**'] },
 
-  // Игнор сборок/покрытия
-  { ignores: ["dist/**", "coverage/**"] },
-
-  // Общие правила для ESM-кода библиотеки
   {
-    files: ["**/*.js"],
-    languageOptions: {
-      ecmaVersion: 2022,
-      sourceType: "module"
-    },
+    files: ['**/*.js', '**/*.mjs'],
+    languageOptions: { ecmaVersion: 2022, sourceType: 'module' },
     rules: {
-      "no-var": "error",
-      "prefer-const": "error",
-      "no-unused-vars": ["warn", { argsIgnorePattern: "^_", varsIgnorePattern: "^_" }],
-      "no-implicit-coercion": "warn",
-      "eqeqeq": ["error", "smart"]
-    }
+      'no-var': 'error',
+      'prefer-const': 'error',
+      'no-unused-vars': ['warn', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
+      'no-implicit-coercion': 'warn',
+      eqeqeq: ['error', 'smart'],
+    },
   },
 
-  // Node-скрипты: bench, examples, tests — разрешаем console
   {
-    files: ["bench/**/*.js", "examples/**/*.js", "tests/**/*.js"],
+    files: ['bench/**/*.js', 'examples/**/*.js', 'tests/**/*.js', 'bin/**/*.mjs'],
     languageOptions: {
-      globals: { console: "readonly" }
-    }
+      globals: { console: 'readonly', process: 'readonly' },
+    },
   },
 
-  // CommonJS-конфиг commitlint
   {
-    files: ["commitlint.config.cjs"],
+    files: ['commitlint.config.cjs'],
     languageOptions: {
-      sourceType: "commonjs",
-      globals: { module: "readonly", require: "readonly" }
-    }
-  }
+      sourceType: 'commonjs',
+      globals: { module: 'readonly', require: 'readonly' },
+    },
+  },
 ];

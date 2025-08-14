@@ -53,5 +53,8 @@
     "size-limit": "^11.1.4",
     "tsup": "^8.2.4",
     "vitest": "^3.2.4"
+  },
+  "bin": {
+    "textxform": "bin/textxform.mjs"
   }
 }
