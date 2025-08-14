@@ -5,7 +5,9 @@ describe('HTML parser → HTML renderer (safe)', () => {
   it('paragraph + strong + link (sanitize javascript:)', () => {
     const htmlIn = '<p>Hello <b>hi</b> <a href="javascript:alert(1)">x</a></p>';
     const out = convert(htmlIn, { from: 'html', to: 'html' });
-    expect(out).toBe('<p>Hello <strong>hi</strong> <a href="#">x</a></p>');
+    expect(out).toBe(
+      '<p>Hello <strong>hi</strong> <a href="#" rel="noopener noreferrer nofollow">x</a></p>'
+    );
   });
 
   it('img data:image allowed; alt kept', () => {

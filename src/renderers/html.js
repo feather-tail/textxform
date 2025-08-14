@@ -2,7 +2,7 @@ import { visit } from '../core/visitor.js';
 import * as U from '../core/utils.js';
 
 export function renderHTML(ast, opts = {}) {
-  const { safe = true } = opts;
+  const { safe = true, linkRel = 'noopener noreferrer nofollow', linkTarget = null } = opts;
 
   const h = {
     Document: (n, _c, r) => n.children.map(r).join('\n'),
@@ -23,8 +23,11 @@ export function renderHTML(ast, opts = {}) {
     Link: (n, _c, r) => {
       const href = safe ? U.sanitizeUrl(n.href) : String(n.href || '');
       const title = n.title ? ` title="${U.escapeAttr(n.title)}"` : '';
-      return `<a href="${U.escapeAttr(href)}"${title}>${n.children.map(r).join('')}</a>`;
+      const rel = linkRel ? ` rel="${U.escapeAttr(linkRel)}"` : '';
+      const target = linkTarget ? ` target="${U.escapeAttr(linkTarget)}"` : '';
+      return `<a href="${U.escapeAttr(href)}"${title}${rel}${target}>${n.children.map(r).join('')}</a>`;
     },
+
     Image: (n) => {
       const src = safe ? U.sanitizeUrl(n.src) : String(n.src || '');
       if (src === '#') return '';
