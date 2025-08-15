@@ -1,4 +1,6 @@
-import { convert, use } from './dist/index.js';
+const api = await import('./dist/index.mjs').catch(() => import('./dist/index.js'));
+const { convert, use } = api;
+
 const autolink = {
   name: 'autolink-demo',
   afterParse(ast) {
