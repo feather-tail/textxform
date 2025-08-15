@@ -608,12 +608,8 @@ function parseHTML(input = "") {
         const meta = { href, title, ...extractStyleMeta(attrs) };
         pushFrame("a", meta);
       },
-      span: () => {
-        pushFrame("span", extractStyleMeta(attrs));
-      },
-      font: () => {
-        pushFrame("font", extractStyleMeta(attrs));
-      },
+      span: () => pushFrame("span", extractStyleMeta(attrs)),
+      font: () => pushFrame("font", extractStyleMeta(attrs)),
       b: () => pushFrame("b", extractStyleMeta(attrs)),
       strong: () => pushFrame("strong", extractStyleMeta(attrs)),
       i: () => pushFrame("i", extractStyleMeta(attrs)),
@@ -623,6 +619,7 @@ function parseHTML(input = "") {
       strike: () => pushFrame("strike", extractStyleMeta(attrs)),
       code: () => pushFrame("code"),
       p: () => pushFrame("p", extractStyleMeta(attrs)),
+      div: () => pushFrame("div", extractStyleMeta(attrs)),
       blockquote: () => pushFrame("blockquote", extractStyleMeta(attrs)),
       ul: () => pushFrame("ul", extractStyleMeta(attrs)),
       ol: () => pushFrame("ol", extractStyleMeta(attrs)),
@@ -659,7 +656,6 @@ function parseHTML(input = "") {
         const kids = wrapByStyle(f.children, f.meta && f.meta.style);
         (kids.length === 1 ? [kids[0]] : kids).forEach(pushChild);
       },
-      // inline
       b: () => {
         var _a;
         const f = popToTag("b");
@@ -699,11 +695,19 @@ function parseHTML(input = "") {
         const f = popToTag("code");
         if (f) pushChild(inlineCode(getText(f.children)));
       },
-      // block
       p: () => {
         var _a;
         const f = popToTag("p");
-        if (f) pushChild(paragraph(wrapByStyle(f.children, (_a = f.meta) == null ? void 0 : _a.style)));
+        if (!f) return;
+        const kids = wrapByStyle(f.children, (_a = f.meta) == null ? void 0 : _a.style);
+        pushChild(paragraph(kids));
+      },
+      div: () => {
+        var _a;
+        const f = popToTag("div");
+        if (!f) return;
+        const kids = wrapByStyle(f.children, (_a = f.meta) == null ? void 0 : _a.style);
+        finalizeRoot(kids).forEach(pushChild);
       },
       blockquote: () => {
         var _a;
@@ -767,7 +771,9 @@ function parseHTML(input = "") {
   }
   const appendText = (raw) => {
     const s = decodeEntities(raw);
-    if (s) pushChild(text(s));
+    if (!s) return;
+    if (top().tag === "#root" && !/\S/.test(s)) return;
+    pushChild(text(s));
   };
   let i = 0;
   while (i < src.length) {
