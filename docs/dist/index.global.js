@@ -34,7 +34,12 @@ var textxform = (() => {
   var emphasis = (children = []) => ({ type: "Emphasis", children });
   var underline = (children = []) => ({ type: "Underline", children });
   var strike = (children = []) => ({ type: "Strike", children });
-  var link = (href = "", children = [], title = null) => ({ type: "Link", href, title, children });
+  var link = (href = "", children = [], title = null) => ({
+    type: "Link",
+    href,
+    title,
+    children
+  });
   var image = (src = "", alt = "") => ({ type: "Image", src, alt });
   var inlineCode = (value = "") => ({ type: "InlineCode", value });
   var codeBlock = (value = "", lang = null) => ({ type: "CodeBlock", value, lang });
@@ -44,8 +49,14 @@ var textxform = (() => {
   var listItem = (children = []) => ({ type: "ListItem", children });
   var lineBreak = () => ({ type: "LineBreak" });
   var spoiler = (children = [], label = null) => ({ type: "Spoiler", label, children });
-  var heading = (value = "", depth = 1) => ({ type: "Heading", value, depth: Math.min(6, Math.max(1, depth)) });
+  var heading = (value = "", depth = 1) => ({
+    type: "Heading",
+    value,
+    depth: Math.min(6, Math.max(1, depth))
+  });
   var thematicBreak = () => ({ type: "ThematicBreak" });
+  var color = (value, children = []) => ({ type: "Color", value, children });
+  var size = (value, children = []) => ({ type: "Size", value, children });
 
   // src/parsers/markdown.js
   function isHr(line) {
@@ -113,6 +124,9 @@ var textxform = (() => {
             continue;
           }
         }
+        pushText("!");
+        i += 1;
+        continue;
       }
       if (s[i] === "[") {
         const txtStart = i + 1;
@@ -124,12 +138,16 @@ var textxform = (() => {
             const inside = s.slice(urlStart, urlEnd).trim();
             const m = inside.match(/^(\S+)(?:\s+"([^"]+)")?$/);
             const hrefVal = m ? m[1] : inside;
+            const titleVal = m && m[2] != null ? m[2] : null;
             const txt = s.slice(txtStart, txtEnd);
-            out.push(link(hrefVal, parseInlines(txt)));
+            out.push(link(hrefVal, parseInlines(txt), titleVal));
             i = urlEnd + 1;
             continue;
           }
         }
+        pushText("[");
+        i += 1;
+        continue;
       }
       if (s[i] === "`") {
         const end = s.indexOf("`", i + 1);
@@ -138,6 +156,9 @@ var textxform = (() => {
           i = end + 1;
           continue;
         }
+        pushText("`");
+        i += 1;
+        continue;
       }
       if (s.startsWith("**", i) || s.startsWith("__", i)) {
         const delim = s.slice(i, i + 2);
@@ -147,6 +168,9 @@ var textxform = (() => {
           i = end + 2;
           continue;
         }
+        pushText(s[i]);
+        i += 1;
+        continue;
       }
       if (s.startsWith("~~", i)) {
         const end = s.indexOf("~~", i + 2);
@@ -155,6 +179,9 @@ var textxform = (() => {
           i = end + 2;
           continue;
         }
+        pushText("~");
+        i += 1;
+        continue;
       }
       if (s[i] === "*" || s[i] === "_") {
         const delim = s[i];
@@ -164,14 +191,17 @@ var textxform = (() => {
           i = end + 1;
           continue;
         }
+        pushText(delim);
+        i += 1;
+        continue;
       }
-      const next = s.slice(i).search(/(\\|!\[|\[|`|\*\*|__|\*|_|~~)/);
-      if (next === -1) {
+      const nextRel = s.slice(i + 1).search(/(\\|!\[|\[|`|\*\*|__|\*|_|~~)/);
+      if (nextRel === -1) {
         pushText(s.slice(i));
         break;
       } else {
-        pushText(s.slice(i, i + next));
-        i += next;
+        pushText(s.slice(i, i + 1 + nextRel));
+        i += 1 + nextRel;
       }
     }
     return out;
@@ -280,10 +310,8 @@ var textxform = (() => {
     const out = [];
     let i = 0;
     const pushText = (s) => {
-      if (!s) return;
-      out.push(text(s));
+      if (s) out.push(text(s));
     };
-    const inlineSet = /* @__PURE__ */ new Set(["b", "i", "u", "s", "url", "img", "spoiler"]);
     while (i < src.length) {
       const lb = src.indexOf("[", i);
       if (lb === -1) {
@@ -306,7 +334,23 @@ var textxform = (() => {
       const eq = raw.indexOf("=");
       const name = (eq === -1 ? raw : raw.slice(0, eq)).trim().toLowerCase();
       const arg = eq === -1 ? "" : raw.slice(eq + 1).trim();
-      if (!inlineSet.has(name)) {
+      const HANDLERS = {
+        b: (arg2, inner2) => strong(parseInline(inner2)),
+        i: (arg2, inner2) => emphasis(parseInline(inner2)),
+        u: (arg2, inner2) => underline(parseInline(inner2)),
+        s: (arg2, inner2) => strike(parseInline(inner2)),
+        img: (arg2, inner2) => image(arg2 || inner2.trim(), ""),
+        url: (arg2, inner2) => {
+          const href = arg2 || inner2.trim();
+          const kids = arg2 ? parseInline(inner2) : [text(inner2)];
+          return link(href, kids);
+        },
+        spoiler: (arg2, inner2) => spoiler(parseInline(inner2), arg2 || null),
+        color: (arg2, inner2) => color((arg2 || "").trim(), parseInline(inner2)),
+        size: (arg2, inner2) => size((arg2 || "").trim(), parseInline(inner2))
+      };
+      const handler = HANDLERS[name];
+      if (!handler) {
         pushText(src.slice(lb, rb + 1));
         i = rb + 1;
         continue;
@@ -318,27 +362,8 @@ var textxform = (() => {
         continue;
       }
       const inner = src.slice(rb + 1, match.start);
-      const after = match.end;
-      if (name === "b") {
-        out.push(strong(parseInline(inner)));
-      } else if (name === "i") {
-        out.push(emphasis(parseInline(inner)));
-      } else if (name === "u") {
-        out.push(underline(parseInline(inner)));
-      } else if (name === "s") {
-        out.push(strike(parseInline(inner)));
-      } else if (name === "img") {
-        const srcUrl = arg || inner.trim();
-        out.push(image(srcUrl, ""));
-      } else if (name === "url") {
-        const href = arg || inner.trim();
-        const textChildren = arg ? parseInline(inner) : [text(inner)];
-        out.push(link(href, textChildren));
-      } else if (name === "spoiler") {
-        const label = arg || null;
-        out.push(spoiler(parseInline(inner), label));
-      }
-      i = after;
+      out.push(handler(arg, inner));
+      i = match.end;
     }
     return out;
   }
@@ -426,6 +451,52 @@ var textxform = (() => {
     if (l.startsWith("data:image/")) return u;
     return "#";
   }
+  var NAMED_COLORS = /* @__PURE__ */ new Set([
+    "black",
+    "silver",
+    "gray",
+    "white",
+    "maroon",
+    "red",
+    "purple",
+    "fuchsia",
+    "green",
+    "lime",
+    "olive",
+    "yellow",
+    "navy",
+    "blue",
+    "teal",
+    "aqua"
+  ]);
+  var HEX_COLOR_RE = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
+  function sanitizeColor(v) {
+    if (typeof v !== "string") return null;
+    const s = v.trim().toLowerCase();
+    if (NAMED_COLORS.has(s)) return s;
+    if (HEX_COLOR_RE.test(s)) return s;
+    return null;
+  }
+  var SIZE_MAP = {
+    small: "0.85em",
+    normal: "1em",
+    large: "1.25em",
+    "x-large": "1.5em"
+  };
+  function sanitizeFontSize(v) {
+    if (typeof v !== "string") return null;
+    const s = v.trim().toLowerCase();
+    if (SIZE_MAP[s]) return SIZE_MAP[s];
+    const m = /^([1-9]\d{0,2})%$/.exec(s);
+    if (m) {
+      const pct = Math.max(50, Math.min(250, parseInt(m[1], 10)));
+      if (pct >= 140) return SIZE_MAP["x-large"];
+      if (pct >= 115) return SIZE_MAP["large"];
+      if (pct <= 95) return SIZE_MAP["small"];
+      return SIZE_MAP["normal"];
+    }
+    return null;
+  }
 
   // src/parsers/html.js
   function decodeEntities(s = "") {
@@ -455,6 +526,8 @@ var textxform = (() => {
         case "ListItem":
         case "List":
         case "Spoiler":
+        case "Color":
+        case "Size":
           (n.children || []).forEach(walk);
           break;
         case "InlineCode":
@@ -501,6 +574,32 @@ var textxform = (() => {
     flush();
     return out;
   }
+  function parseStyleMap(styleStr = "") {
+    const map = {};
+    String(styleStr).split(";").forEach((pair) => {
+      const i = pair.indexOf(":");
+      if (i > 0) {
+        const k = pair.slice(0, i).trim().toLowerCase();
+        const val = pair.slice(i + 1).trim();
+        if (k) map[k] = val;
+      }
+    });
+    return map;
+  }
+  function extractStyleMeta(attrs) {
+    const style = parseStyleMap(getAttr("style", attrs));
+    const colorAttr = getAttr("color", attrs);
+    if (colorAttr && !style.color) style.color = colorAttr;
+    const sizeAttr = getAttr("size", attrs);
+    if (sizeAttr && !style["font-size"]) style["font-size"] = sizeAttr;
+    return { style };
+  }
+  function wrapByStyle(children, st) {
+    let nodes = children || [];
+    if (st && st["font-size"]) nodes = [size(st["font-size"], nodes)];
+    if (st && st.color) nodes = [color(st.color, nodes)];
+    return nodes;
+  }
   function parseHTML(input = "") {
     const src = String(input);
     const root = { tag: "#root", children: [] };
@@ -522,154 +621,178 @@ var textxform = (() => {
       }
       return null;
     };
-    const handleStartTag = (tag, attrs) => {
-      switch (tag) {
-        case "br":
-          pushChild(lineBreak());
-          return;
-        case "hr":
-          pushChild(thematicBreak());
-          return;
-        case "img": {
+    function handleStartTag(tag, attrs) {
+      const START = {
+        br: () => pushChild(lineBreak()),
+        hr: () => pushChild(thematicBreak()),
+        img: () => {
           const s = sanitizeUrl(getAttr("src", attrs));
           const alt = getAttr("alt", attrs);
           if (s !== "#") pushChild(image(s, alt));
-          return;
-        }
-        case "a": {
+        },
+        a: () => {
           const href = sanitizeUrl(getAttr("href", attrs));
           const title = getAttr("title", attrs) || null;
-          pushFrame("a", { href, title });
-          return;
-        }
-        case "b":
-        case "strong":
-        case "i":
-        case "em":
-        case "u":
-        case "s":
-        case "strike":
-        case "code":
-          pushFrame(tag);
-          return;
-        case "p":
-        case "blockquote":
-        case "ul":
-        case "ol":
-        case "li":
-        case "pre":
-        case "h1":
-        case "h2":
-        case "h3":
-        case "h4":
-        case "h5":
-        case "h6":
-          pushFrame(tag);
-          return;
-        default:
-          return;
-      }
-    };
-    const handleCloseTag = (tag) => {
-      switch (tag) {
-        case "a": {
-          const frame = popToTag("a");
-          if (!frame) return;
-          const { href, title } = frame.meta || {};
-          pushChild(link(href || "#", frame.children, title));
-          return;
-        }
-        case "b":
-        case "strong": {
-          const f = popToTag(tag);
+          const meta = { href, title, ...extractStyleMeta(attrs) };
+          pushFrame("a", meta);
+        },
+        span: () => {
+          pushFrame("span", extractStyleMeta(attrs));
+        },
+        font: () => {
+          pushFrame("font", extractStyleMeta(attrs));
+        },
+        b: () => pushFrame("b", extractStyleMeta(attrs)),
+        strong: () => pushFrame("strong", extractStyleMeta(attrs)),
+        i: () => pushFrame("i", extractStyleMeta(attrs)),
+        em: () => pushFrame("em", extractStyleMeta(attrs)),
+        u: () => pushFrame("u", extractStyleMeta(attrs)),
+        s: () => pushFrame("s", extractStyleMeta(attrs)),
+        strike: () => pushFrame("strike", extractStyleMeta(attrs)),
+        code: () => pushFrame("code"),
+        p: () => pushFrame("p", extractStyleMeta(attrs)),
+        blockquote: () => pushFrame("blockquote", extractStyleMeta(attrs)),
+        ul: () => pushFrame("ul", extractStyleMeta(attrs)),
+        ol: () => pushFrame("ol", extractStyleMeta(attrs)),
+        li: () => pushFrame("li", extractStyleMeta(attrs)),
+        pre: () => pushFrame("pre", extractStyleMeta(attrs)),
+        h1: () => pushFrame("h1", extractStyleMeta(attrs)),
+        h2: () => pushFrame("h2", extractStyleMeta(attrs)),
+        h3: () => pushFrame("h3", extractStyleMeta(attrs)),
+        h4: () => pushFrame("h4", extractStyleMeta(attrs)),
+        h5: () => pushFrame("h5", extractStyleMeta(attrs)),
+        h6: () => pushFrame("h6", extractStyleMeta(attrs))
+      };
+      (START[tag] || (() => {
+      }))();
+    }
+    function handleCloseTag(tag) {
+      const CLOSE = {
+        a: () => {
+          const f = popToTag("a");
           if (!f) return;
-          pushChild(strong(f.children));
-          return;
-        }
-        case "i":
-        case "em": {
-          const f = popToTag(tag);
+          const { href, title, style } = f.meta || {};
+          const kids = wrapByStyle(f.children, style);
+          pushChild(link(href || "#", kids, title));
+        },
+        span: () => {
+          const f = popToTag("span");
           if (!f) return;
-          pushChild(emphasis(f.children));
-          return;
-        }
-        case "u": {
+          const kids = wrapByStyle(f.children, f.meta && f.meta.style);
+          (kids.length === 1 ? [kids[0]] : kids).forEach(pushChild);
+        },
+        font: () => {
+          const f = popToTag("font");
+          if (!f) return;
+          const kids = wrapByStyle(f.children, f.meta && f.meta.style);
+          (kids.length === 1 ? [kids[0]] : kids).forEach(pushChild);
+        },
+        // inline
+        b: () => {
+          var _a;
+          const f = popToTag("b");
+          if (f) pushChild(strong(wrapByStyle(f.children, (_a = f.meta) == null ? void 0 : _a.style)));
+        },
+        strong: () => {
+          var _a;
+          const f = popToTag("strong");
+          if (f) pushChild(strong(wrapByStyle(f.children, (_a = f.meta) == null ? void 0 : _a.style)));
+        },
+        i: () => {
+          var _a;
+          const f = popToTag("i");
+          if (f) pushChild(emphasis(wrapByStyle(f.children, (_a = f.meta) == null ? void 0 : _a.style)));
+        },
+        em: () => {
+          var _a;
+          const f = popToTag("em");
+          if (f) pushChild(emphasis(wrapByStyle(f.children, (_a = f.meta) == null ? void 0 : _a.style)));
+        },
+        u: () => {
+          var _a;
           const f = popToTag("u");
-          if (!f) return;
-          pushChild(underline(f.children));
-          return;
-        }
-        case "s":
-        case "strike": {
-          const f = popToTag(tag);
-          if (!f) return;
-          pushChild(strike(f.children));
-          return;
-        }
-        case "code": {
+          if (f) pushChild(underline(wrapByStyle(f.children, (_a = f.meta) == null ? void 0 : _a.style)));
+        },
+        s: () => {
+          var _a;
+          const f = popToTag("s");
+          if (f) pushChild(strike(wrapByStyle(f.children, (_a = f.meta) == null ? void 0 : _a.style)));
+        },
+        strike: () => {
+          var _a;
+          const f = popToTag("strike");
+          if (f) pushChild(strike(wrapByStyle(f.children, (_a = f.meta) == null ? void 0 : _a.style)));
+        },
+        code: () => {
           const f = popToTag("code");
-          if (!f) return;
-          pushChild(inlineCode(getText(f.children)));
-          return;
-        }
-        case "p": {
+          if (f) pushChild(inlineCode(getText(f.children)));
+        },
+        // block
+        p: () => {
+          var _a;
           const f = popToTag("p");
-          if (!f) return;
-          pushChild(paragraph(f.children));
-          return;
-        }
-        case "blockquote": {
+          if (f) pushChild(paragraph(wrapByStyle(f.children, (_a = f.meta) == null ? void 0 : _a.style)));
+        },
+        blockquote: () => {
+          var _a;
           const f = popToTag("blockquote");
           if (!f) return;
-          pushChild(blockquote(ensureParagraphs(f.children)));
-          return;
-        }
-        case "li": {
+          pushChild(blockquote(ensureParagraphs(wrapByStyle(f.children, (_a = f.meta) == null ? void 0 : _a.style))));
+        },
+        li: () => {
+          var _a;
           const f = popToTag("li");
           if (!f) return;
-          pushChild(listItem(ensureParagraphs(f.children)));
-          return;
-        }
-        case "ul": {
+          pushChild(listItem(ensureParagraphs(wrapByStyle(f.children, (_a = f.meta) == null ? void 0 : _a.style))));
+        },
+        ul: () => {
           const f = popToTag("ul");
           if (!f) return;
           const items = (f.children || []).map(
             (c) => c.type === "ListItem" ? c : listItem(ensureParagraphs([c]))
           );
           pushChild(list(false, items));
-          return;
-        }
-        case "ol": {
+        },
+        ol: () => {
           const f = popToTag("ol");
           if (!f) return;
           const items = (f.children || []).map(
             (c) => c.type === "ListItem" ? c : listItem(ensureParagraphs([c]))
           );
           pushChild(list(true, items));
-          return;
-        }
-        case "pre": {
+        },
+        pre: () => {
           const f = popToTag("pre");
-          if (!f) return;
-          pushChild(codeBlock(getText(f.children)));
-          return;
+          if (f) pushChild(codeBlock(getText(f.children)));
+        },
+        h1: () => {
+          const f = popToTag("h1");
+          if (f) pushChild(heading(getText(f.children).trim(), 1));
+        },
+        h2: () => {
+          const f = popToTag("h2");
+          if (f) pushChild(heading(getText(f.children).trim(), 2));
+        },
+        h3: () => {
+          const f = popToTag("h3");
+          if (f) pushChild(heading(getText(f.children).trim(), 3));
+        },
+        h4: () => {
+          const f = popToTag("h4");
+          if (f) pushChild(heading(getText(f.children).trim(), 4));
+        },
+        h5: () => {
+          const f = popToTag("h5");
+          if (f) pushChild(heading(getText(f.children).trim(), 5));
+        },
+        h6: () => {
+          const f = popToTag("h6");
+          if (f) pushChild(heading(getText(f.children).trim(), 6));
         }
-        case "h1":
-        case "h2":
-        case "h3":
-        case "h4":
-        case "h5":
-        case "h6": {
-          const f = popToTag(tag);
-          if (!f) return;
-          const depth = Number(tag.slice(1)) || 1;
-          pushChild(heading(getText(f.children).trim(), depth));
-          return;
-        }
-        default:
-          return;
-      }
-    };
+      };
+      (CLOSE[tag] || (() => {
+      }))();
+    }
     const appendText = (raw) => {
       const s = decodeEntities(raw);
       if (s) pushChild(text(s));
@@ -774,6 +897,18 @@ var textxform = (() => {
         const summary = `<summary>${escapeHtml(n.label ?? "\u0421\u043F\u043E\u0439\u043B\u0435\u0440")}</summary>`;
         return `<details>${summary}${n.children.map(r).join("")}</details>`;
       },
+      Color: (n, _c, r) => {
+        const inner = n.children.map(r).join("");
+        const val = typeof sanitizeColor === "function" ? sanitizeColor(n.value) : null;
+        if (!val) return inner;
+        return `<span style="color:${escapeAttr(val)}">${inner}</span>`;
+      },
+      Size: (n, _c, r) => {
+        const inner = n.children.map(r).join("");
+        const css = typeof sanitizeFontSize === "function" ? sanitizeFontSize(n.value) : null;
+        if (!css) return inner;
+        return `<span style="font-size:${escapeAttr(css)}">${inner}</span>`;
+      },
       __unknown: () => ""
     };
     return visit(ast, h, {});
@@ -787,6 +922,8 @@ var textxform = (() => {
       Text: (n) => String(n.value ?? ""),
       Heading: (n) => "#".repeat(Math.min(6, Math.max(1, n.depth || 1))) + " " + (n.value || ""),
       ThematicBreak: () => "---",
+      Color: (n, _c, r) => n.children.map(r).join(""),
+      Size: (n, _c, r) => n.children.map(r).join(""),
       Strong: (n, _c, r) => `**${n.children.map(r).join("")}**`,
       Emphasis: (n, _c, r) => `*${n.children.map(r).join("")}*`,
       Underline: (n, _c, r) => `<u>${n.children.map(r).join("")}</u>`,
@@ -820,6 +957,18 @@ var textxform = (() => {
       Text: (n) => String(n.value ?? ""),
       Heading: (n) => `[b]${n.value || ""}[/b]`,
       ThematicBreak: () => `[hr]`,
+      Color: (n, _c, r) => {
+        const val = String(n.value || "").trim();
+        const inner = n.children.map(r).join("");
+        if (!val) return inner;
+        return `[color=${val}]${inner}[/color]`;
+      },
+      Size: (n, _c, r) => {
+        const val = String(n.value || "").trim();
+        const inner = n.children.map(r).join("");
+        if (!val) return inner;
+        return `[size=${val}]${inner}[/size]`;
+      },
       Strong: (n, _c, r) => `[b]${n.children.map(r).join("")}[/b]`,
       Emphasis: (n, _c, r) => `[i]${n.children.map(r).join("")}[/i]`,
       Underline: (n, _c, r) => `[u]${n.children.map(r).join("")}[/u]`,
@@ -841,13 +990,32 @@ var textxform = (() => {
   }
 
   // src/renderers/plaintext.js
-  function renderPlaintext(ast, _opts = {}) {
-    const handlers = {
-      Document: (node, _ctx, recur) => node.children.map(recur).join("\n\n"),
-      Paragraph: (node, _ctx, recur) => node.children.map(recur).join(""),
-      Text: (node) => String(node.value ?? "")
+  function renderPlaintext(ast) {
+    const h = {
+      Document: (n, _c, r) => n.children.map(r).join("\n\n"),
+      Paragraph: (n, _c, r) => n.children.map(r).join(""),
+      Text: (n) => String(n.value ?? ""),
+      Heading: (n) => String(n.value ?? ""),
+      ThematicBreak: () => "",
+      Strong: (n, _c, r) => n.children.map(r).join(""),
+      Emphasis: (n, _c, r) => n.children.map(r).join(""),
+      Underline: (n, _c, r) => n.children.map(r).join(""),
+      Strike: (n, _c, r) => n.children.map(r).join(""),
+      InlineCode: (n) => String(n.value ?? ""),
+      CodeBlock: (n) => String(n.value ?? ""),
+      LineBreak: () => "\n",
+      Link: (n, _c, r) => n.children.map(r).join(""),
+      Image: (n) => n.alt ? String(n.alt) : "",
+      Blockquote: (n, _c, r) => n.children.map(r).join("\n"),
+      Quote: (n, _c, r) => n.children.map(r).join(""),
+      List: (n, _c, r) => n.children.map(r).join("\n"),
+      ListItem: (n, _c, r) => n.children.map(r).join(""),
+      Spoiler: (n, _c, r) => n.children.map(r).join(""),
+      Color: (n, _c, r) => n.children.map(r).join(""),
+      Size: (n, _c, r) => n.children.map(r).join(""),
+      __unknown: () => ""
     };
-    return visit(ast, handlers, {});
+    return visit(ast, h, {});
   }
 
   // src/core/plugins.js

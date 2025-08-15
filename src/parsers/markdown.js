@@ -65,14 +65,12 @@ function parseInlines(s) {
   };
 
   while (i < s.length) {
-    // escape
     if (s[i] === '\\' && i + 1 < s.length) {
       pushText(s[i + 1]);
       i += 2;
       continue;
     }
 
-    // image ![alt](src[ "title"])
     if (s[i] === '!' && s[i + 1] === '[') {
       const altStart = i + 2;
       const altEnd = findClosing(s, altStart, '[', ']');
@@ -89,9 +87,11 @@ function parseInlines(s) {
           continue;
         }
       }
+      pushText('!');
+      i += 1;
+      continue;
     }
 
-    // link [text](href[ "title"])
     if (s[i] === '[') {
       const txtStart = i + 1;
       const txtEnd = findClosing(s, txtStart, '[', ']');
@@ -102,15 +102,18 @@ function parseInlines(s) {
           const inside = s.slice(urlStart, urlEnd).trim();
           const m = inside.match(/^(\S+)(?:\s+"([^"]+)")?$/);
           const hrefVal = m ? m[1] : inside;
+          const titleVal = m && m[2] != null ? m[2] : null;
           const txt = s.slice(txtStart, txtEnd);
-          out.push(link(hrefVal, parseInlines(txt)));
+          out.push(link(hrefVal, parseInlines(txt), titleVal));
           i = urlEnd + 1;
           continue;
         }
       }
+      pushText('[');
+      i += 1;
+      continue;
     }
 
-    // code `...`
     if (s[i] === '`') {
       const end = s.indexOf('`', i + 1);
       if (end !== -1) {
@@ -118,9 +121,11 @@ function parseInlines(s) {
         i = end + 1;
         continue;
       }
+      pushText('`');
+      i += 1;
+      continue;
     }
 
-    // strong ** or __
     if (s.startsWith('**', i) || s.startsWith('__', i)) {
       const delim = s.slice(i, i + 2);
       const end = s.indexOf(delim, i + 2);
@@ -129,9 +134,11 @@ function parseInlines(s) {
         i = end + 2;
         continue;
       }
+      pushText(s[i]);
+      i += 1;
+      continue;
     }
 
-    // strike ~~
     if (s.startsWith('~~', i)) {
       const end = s.indexOf('~~', i + 2);
       if (end !== -1) {
@@ -139,9 +146,11 @@ function parseInlines(s) {
         i = end + 2;
         continue;
       }
+      pushText('~');
+      i += 1;
+      continue;
     }
 
-    // emphasis * or _
     if (s[i] === '*' || s[i] === '_') {
       const delim = s[i];
       const end = s.indexOf(delim, i + 1);
@@ -150,16 +159,18 @@ function parseInlines(s) {
         i = end + 1;
         continue;
       }
+      pushText(delim);
+      i += 1;
+      continue;
     }
 
-    // fallback
-    const next = s.slice(i).search(/(\\|!\[|\[|`|\*\*|__|\*|_|~~)/);
-    if (next === -1) {
+    const nextRel = s.slice(i + 1).search(/(\\|!\[|\[|`|\*\*|__|\*|_|~~)/);
+    if (nextRel === -1) {
       pushText(s.slice(i));
       break;
     } else {
-      pushText(s.slice(i, i + next));
-      i += next;
+      pushText(s.slice(i, i + 1 + nextRel));
+      i += 1 + nextRel;
     }
   }
 
@@ -181,7 +192,6 @@ function parseBlocks(src) {
       continue;
     }
 
-    // fenced code
     let m = line.match(/^ {0,3}(```|~~~)\s*([A-Za-z0-9_-]+)?\s*$/);
     if (m) {
       const fence = m[1];
@@ -197,7 +207,6 @@ function parseBlocks(src) {
       continue;
     }
 
-    // heading
     m = line.match(/^ {0,3}(#{1,6})\s+(.+)$/);
     if (m) {
       nodes.push(heading(m[2].trim(), m[1].length));
@@ -205,14 +214,12 @@ function parseBlocks(src) {
       continue;
     }
 
-    // hr
     if (isHr(line)) {
       nodes.push(thematicBreak());
       i++;
       continue;
     }
 
-    // blockquote
     if (/^ {0,3}>\s?/.test(line)) {
       const buf = [];
       while (i < lines.length && /^ {0,3}>\s?/.test(lines[i])) {
@@ -224,7 +231,6 @@ function parseBlocks(src) {
       continue;
     }
 
-    // list
     const ulRe = /^ {0,3}[-*+]\s+(.+)$/;
     const olRe = /^ {0,3}\d+\.\s+(.+)$/;
     if (ulRe.test(line) || olRe.test(line)) {
@@ -242,7 +248,6 @@ function parseBlocks(src) {
       continue;
     }
 
-    // paragraph
     const buf = [line];
     i++;
     while (i < lines.length) {
