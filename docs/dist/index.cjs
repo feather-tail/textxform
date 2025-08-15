@@ -594,11 +594,47 @@ function extractStyleMeta(attrs) {
   if (sizeAttr && !style["font-size"]) style["font-size"] = sizeAttr;
   return { style };
 }
-function wrapByStyle(children, st) {
-  let nodes = children || [];
-  if (st && st["font-size"]) nodes = [size(st["font-size"], nodes)];
-  if (st && st.color) nodes = [color(st.color, nodes)];
-  return nodes;
+var BLOCK_TYPES = /* @__PURE__ */ new Set([
+  "Paragraph",
+  "Blockquote",
+  "List",
+  "ListItem",
+  "Heading",
+  "CodeBlock",
+  "ThematicBreak"
+]);
+function hasBlock(nodes = []) {
+  return nodes.some((n) => n && BLOCK_TYPES.has(n.type));
+}
+function applyInlineStyle(children = [], style = {}) {
+  let res = children;
+  if (style["font-size"]) res = [size(style["font-size"], res)];
+  if (style.color) res = [color(style.color, res)];
+  return res;
+}
+function wrapByStyle(nodes = [], style = null) {
+  if (!style || nodes.length === 0) return nodes;
+  if (!hasBlock(nodes)) {
+    return applyInlineStyle(nodes, style);
+  }
+  const mapNode = (n) => {
+    if (!n) return n;
+    switch (n.type) {
+      case "Paragraph":
+        return { ...n, children: applyInlineStyle(n.children || [], style) };
+      case "ListItem":
+      case "List":
+      case "Blockquote":
+        return { ...n, children: (n.children || []).map(mapNode) };
+      case "Heading":
+      case "CodeBlock":
+      case "ThematicBreak":
+        return n;
+      default:
+        return n;
+    }
+  };
+  return nodes.map(mapNode);
 }
 function parseHTML(input = "") {
   const src = String(input);

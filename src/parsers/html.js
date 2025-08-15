@@ -133,12 +133,60 @@ function extractStyleMeta(attrs) {
   return { style };
 }
 
-function wrapByStyle(children, st) {
-  let nodes = children || [];
-  if (st && st['font-size']) nodes = [sizeNode(st['font-size'], nodes)];
-  if (st && st.color) nodes = [colorNode(st.color, nodes)];
-  return nodes;
+const BLOCK_TYPES = new Set([
+  'Paragraph',
+  'Blockquote',
+  'List',
+  'ListItem',
+  'Heading',
+  'CodeBlock',
+  'ThematicBreak',
+]);
+
+function hasBlock(nodes = []) {
+  return nodes.some((n) => n && BLOCK_TYPES.has(n.type));
 }
+
+function applyInlineStyle(children = [], style = {}) {
+  let res = children;
+  if (style['font-size']) res = [sizeNode(style['font-size'], res)];
+  if (style.color) res = [colorNode(style.color, res)];
+  return res;
+}
+
+function wrapByStyle(nodes = [], style = null) {
+  if (!style || nodes.length === 0) return nodes;
+
+  if (!hasBlock(nodes)) {
+    return applyInlineStyle(nodes, style);
+  }
+
+  const mapNode = (n) => {
+    if (!n) return n;
+
+    switch (n.type) {
+      case 'Paragraph':
+        return { ...n, children: applyInlineStyle(n.children || [], style) };
+
+      case 'ListItem':
+      case 'List':
+      case 'Blockquote':
+        return { ...n, children: (n.children || []).map(mapNode) };
+
+      case 'Heading':
+      case 'CodeBlock':
+      case 'ThematicBreak':
+        return n;
+
+      default:
+        return n;
+    }
+  };
+
+  return nodes.map(mapNode);
+}
+
+/* ---------------- main parser ---------------- */
 
 export function parseHTML(input = '') {
   const src = String(input);
@@ -180,6 +228,7 @@ export function parseHTML(input = '') {
       },
       span: () => pushFrame('span', extractStyleMeta(attrs)),
       font: () => pushFrame('font', extractStyleMeta(attrs)),
+
       b: () => pushFrame('b', extractStyleMeta(attrs)),
       strong: () => pushFrame('strong', extractStyleMeta(attrs)),
       i: () => pushFrame('i', extractStyleMeta(attrs)),
@@ -188,6 +237,7 @@ export function parseHTML(input = '') {
       s: () => pushFrame('s', extractStyleMeta(attrs)),
       strike: () => pushFrame('strike', extractStyleMeta(attrs)),
       code: () => pushFrame('code'),
+
       p: () => pushFrame('p', extractStyleMeta(attrs)),
       div: () => pushFrame('div', extractStyleMeta(attrs)),
       blockquote: () => pushFrame('blockquote', extractStyleMeta(attrs)),
@@ -214,6 +264,7 @@ export function parseHTML(input = '') {
         const kids = wrapByStyle(f.children, style);
         pushChild(link(href || '#', kids, title));
       },
+
       span: () => {
         const f = popToTag('span');
         if (!f) return;
@@ -226,6 +277,7 @@ export function parseHTML(input = '') {
         const kids = wrapByStyle(f.children, f.meta && f.meta.style);
         (kids.length === 1 ? [kids[0]] : kids).forEach(pushChild);
       },
+
       b: () => {
         const f = popToTag('b');
         if (f) pushChild(strong(wrapByStyle(f.children, f.meta?.style)));
@@ -258,6 +310,7 @@ export function parseHTML(input = '') {
         const f = popToTag('code');
         if (f) pushChild(inlineCode(getText(f.children)));
       },
+
       p: () => {
         const f = popToTag('p');
         if (!f) return;
