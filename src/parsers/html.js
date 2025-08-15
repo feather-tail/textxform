@@ -314,18 +314,19 @@ export function parseHTML(input = '') {
         if (!f) return;
         const kids = wrapByStyle(f.children, f.meta?.style);
         const node = paragraph(kids);
-        node.meta = { ...(node.meta || {}), tag: 'p' };
+        node.meta = { ...(node.meta || {}), tag: 'p', style: f.meta?.style || null };
         pushChild(node);
       },
       div: () => {
         const f = popToTag('div');
         if (!f) return;
         const kids = wrapByStyle(f.children, f.meta?.style);
+
         if (hasBlock(kids)) {
           finalizeRoot(kids).forEach(pushChild);
         } else {
           const node = paragraph(kids);
-          node.meta = { ...(node.meta || {}), tag: 'div' };
+          node.meta = { ...(node.meta || {}), tag: 'div', style: f.meta?.style || null };
           pushChild(node);
         }
       },
