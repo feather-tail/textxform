@@ -130,7 +130,10 @@ function extractStyleMeta(attrs) {
   const sizeAttr = getAttr('size', attrs);
   if (sizeAttr && !style['font-size']) style['font-size'] = sizeAttr;
 
-  return { style };
+  const className = getAttr('class', attrs) || null;
+  const id = getAttr('id', attrs) || null;
+
+  return { style, className, id };
 }
 
 const BLOCK_TYPES = new Set([
@@ -167,17 +170,14 @@ function wrapByStyle(nodes = [], style = null) {
     switch (n.type) {
       case 'Paragraph':
         return { ...n, children: applyInlineStyle(n.children || [], style) };
-
       case 'ListItem':
       case 'List':
       case 'Blockquote':
         return { ...n, children: (n.children || []).map(mapNode) };
-
       case 'Heading':
       case 'CodeBlock':
       case 'ThematicBreak':
         return n;
-
       default:
         return n;
     }
@@ -314,7 +314,13 @@ export function parseHTML(input = '') {
         if (!f) return;
         const kids = wrapByStyle(f.children, f.meta?.style);
         const node = paragraph(kids);
-        node.meta = { ...(node.meta || {}), tag: 'p', style: f.meta?.style || null };
+        node.meta = {
+          ...(node.meta || {}),
+          tag: 'p',
+          style: f.meta?.style || null,
+          className: f.meta?.className || null,
+          id: f.meta?.id || null,
+        };
         pushChild(node);
       },
       div: () => {
@@ -326,7 +332,13 @@ export function parseHTML(input = '') {
           finalizeRoot(kids).forEach(pushChild);
         } else {
           const node = paragraph(kids);
-          node.meta = { ...(node.meta || {}), tag: 'div', style: f.meta?.style || null };
+          node.meta = {
+            ...(node.meta || {}),
+            tag: 'div',
+            style: f.meta?.style || null,
+            className: f.meta?.className || null,
+            id: f.meta?.id || null,
+          };
           pushChild(node);
         }
       },

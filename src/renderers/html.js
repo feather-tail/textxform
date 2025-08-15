@@ -59,7 +59,7 @@ export function renderHTML(ast, opts = {}) {
       const tag = n.meta?.tag === 'div' ? 'div' : 'p';
 
       const metaStyle = n.meta?.style || null;
-      let attrsStyle = '';
+      let cssAttr = '';
       let children = n.children || [];
 
       if (metaStyle && (metaStyle.color || metaStyle['font-size'])) {
@@ -79,17 +79,22 @@ export function renderHTML(ast, opts = {}) {
           if (v) cssParts.push(`font-size:${String(v)}`);
         }
         if (cssParts.length) {
-          attrsStyle = cssParts.join(';');
+          cssAttr = cssParts.join(';');
           children = stripLeadingWrappers(children, metaStyle);
         }
       } else {
         const hoisted = hoistBlockStyle(children);
-        attrsStyle = hoisted.style;
+        cssAttr = hoisted.style;
         children = hoisted.children;
       }
 
       const body = children.map(r).join('');
-      const attrs = attrsStyle ? ` style="${U.escapeAttr(attrsStyle)}"` : '';
+
+      let attrs = '';
+      if (n.meta?.className) attrs += ` class="${U.escapeAttr(n.meta.className)}"`;
+      if (n.meta?.id) attrs += ` id="${U.escapeAttr(n.meta.id)}"`;
+      if (cssAttr) attrs += ` style="${U.escapeAttr(cssAttr)}"`;
+
       return `<${tag}${attrs}>${body}</${tag}>`;
     },
 
