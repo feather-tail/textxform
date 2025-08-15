@@ -121,7 +121,7 @@ function parseStyleMap(styleStr = '') {
   return map;
 }
 
-function extractStyleMeta(attrs) {
+function extractMeta(attrs) {
   const style = parseStyleMap(getAttr('style', attrs));
 
   const colorAttr = getAttr('color', attrs);
@@ -130,10 +130,9 @@ function extractStyleMeta(attrs) {
   const sizeAttr = getAttr('size', attrs);
   if (sizeAttr && !style['font-size']) style['font-size'] = sizeAttr;
 
-  const className = getAttr('class', attrs) || null;
-  const id = getAttr('id', attrs) || null;
+  const className = getAttr('class', attrs);
 
-  return { style, className, id };
+  return { style, className: className || null };
 }
 
 const BLOCK_TYPES = new Set([
@@ -169,15 +168,21 @@ function wrapByStyle(nodes = [], style = null) {
 
     switch (n.type) {
       case 'Paragraph':
-        return { ...n, children: applyInlineStyle(n.children || [], style) };
+        return {
+          ...n,
+          style: { ...(n.style || {}), ...(style || {}) },
+        };
+
       case 'ListItem':
       case 'List':
       case 'Blockquote':
         return { ...n, children: (n.children || []).map(mapNode) };
+
       case 'Heading':
       case 'CodeBlock':
       case 'ThematicBreak':
         return n;
+
       default:
         return n;
     }
@@ -221,34 +226,34 @@ export function parseHTML(input = '') {
       a: () => {
         const href = sanitizeUrl(getAttr('href', attrs));
         const title = getAttr('title', attrs) || null;
-        const meta = { href, title, ...extractStyleMeta(attrs) };
+        const meta = { href, title, ...extractMeta(attrs) };
         pushFrame('a', meta);
       },
-      span: () => pushFrame('span', extractStyleMeta(attrs)),
-      font: () => pushFrame('font', extractStyleMeta(attrs)),
+      span: () => pushFrame('span', extractMeta(attrs)),
+      font: () => pushFrame('font', extractMeta(attrs)),
 
-      b: () => pushFrame('b', extractStyleMeta(attrs)),
-      strong: () => pushFrame('strong', extractStyleMeta(attrs)),
-      i: () => pushFrame('i', extractStyleMeta(attrs)),
-      em: () => pushFrame('em', extractStyleMeta(attrs)),
-      u: () => pushFrame('u', extractStyleMeta(attrs)),
-      s: () => pushFrame('s', extractStyleMeta(attrs)),
-      strike: () => pushFrame('strike', extractStyleMeta(attrs)),
+      b: () => pushFrame('b', extractMeta(attrs)),
+      strong: () => pushFrame('strong', extractMeta(attrs)),
+      i: () => pushFrame('i', extractMeta(attrs)),
+      em: () => pushFrame('em', extractMeta(attrs)),
+      u: () => pushFrame('u', extractMeta(attrs)),
+      s: () => pushFrame('s', extractMeta(attrs)),
+      strike: () => pushFrame('strike', extractMeta(attrs)),
       code: () => pushFrame('code'),
 
-      p: () => pushFrame('p', extractStyleMeta(attrs)),
-      div: () => pushFrame('div', extractStyleMeta(attrs)),
-      blockquote: () => pushFrame('blockquote', extractStyleMeta(attrs)),
-      ul: () => pushFrame('ul', extractStyleMeta(attrs)),
-      ol: () => pushFrame('ol', extractStyleMeta(attrs)),
-      li: () => pushFrame('li', extractStyleMeta(attrs)),
-      pre: () => pushFrame('pre', extractStyleMeta(attrs)),
-      h1: () => pushFrame('h1', extractStyleMeta(attrs)),
-      h2: () => pushFrame('h2', extractStyleMeta(attrs)),
-      h3: () => pushFrame('h3', extractStyleMeta(attrs)),
-      h4: () => pushFrame('h4', extractStyleMeta(attrs)),
-      h5: () => pushFrame('h5', extractStyleMeta(attrs)),
-      h6: () => pushFrame('h6', extractStyleMeta(attrs)),
+      p: () => pushFrame('p', extractMeta(attrs)),
+      div: () => pushFrame('div', extractMeta(attrs)),
+      blockquote: () => pushFrame('blockquote', extractMeta(attrs)),
+      ul: () => pushFrame('ul', extractMeta(attrs)),
+      ol: () => pushFrame('ol', extractMeta(attrs)),
+      li: () => pushFrame('li', extractMeta(attrs)),
+      pre: () => pushFrame('pre', extractMeta(attrs)),
+      h1: () => pushFrame('h1', extractMeta(attrs)),
+      h2: () => pushFrame('h2', extractMeta(attrs)),
+      h3: () => pushFrame('h3', extractMeta(attrs)),
+      h4: () => pushFrame('h4', extractMeta(attrs)),
+      h5: () => pushFrame('h5', extractMeta(attrs)),
+      h6: () => pushFrame('h6', extractMeta(attrs)),
     };
     (START[tag] || (() => {}))();
   }
@@ -312,40 +317,37 @@ export function parseHTML(input = '') {
       p: () => {
         const f = popToTag('p');
         if (!f) return;
-        const kids = wrapByStyle(f.children, f.meta?.style);
-        const node = paragraph(kids);
-        node.meta = {
-          ...(node.meta || {}),
-          tag: 'p',
-          style: f.meta?.style || null,
-          className: f.meta?.className || null,
-          id: f.meta?.id || null,
-        };
-        pushChild(node);
+        const para = paragraph(f.children);
+        if (f.meta?.className) para.className = f.meta.className;
+        const st = f.meta?.style || null;
+        if (st && (st.color || st['font-size'])) {
+          para.style = { ...(para.style || {}), ...st };
+        }
+        pushChild(para);
       },
+
       div: () => {
         const f = popToTag('div');
         if (!f) return;
-        const kids = wrapByStyle(f.children, f.meta?.style);
+        let blocks = finalizeRoot(f.children);
 
-        if (hasBlock(kids)) {
-          finalizeRoot(kids).forEach(pushChild);
-        } else {
-          const node = paragraph(kids);
-          node.meta = {
-            ...(node.meta || {}),
-            tag: 'div',
-            style: f.meta?.style || null,
-            className: f.meta?.className || null,
-            id: f.meta?.id || null,
-          };
-          pushChild(node);
+        const st = f.meta?.style || null;
+        if (st && (st.color || st['font-size'])) {
+          blocks = blocks.map((n) => {
+            if (n && n.type === 'Paragraph') {
+              return { ...n, style: { ...(n.style || {}), ...st } };
+            }
+            return n;
+          });
         }
+        blocks.forEach(pushChild);
       },
+
       blockquote: () => {
         const f = popToTag('blockquote');
         if (!f) return;
-        pushChild(blockquote(ensureParagraphs(wrapByStyle(f.children, f.meta?.style))));
+        const kids = ensureParagraphs(wrapByStyle(f.children, f.meta?.style));
+        pushChild(blockquote(kids));
       },
       li: () => {
         const f = popToTag('li');
