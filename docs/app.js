@@ -1,4 +1,9 @@
-import { convert, use } from './dist/index.js';
+const api = window.textxform;
+const { convert, use } = api || {};
+if (!convert) {
+  document.getElementById('output').value = 'Error: textxform global not loaded';
+  throw new Error('textxform global not loaded');
+}
 
 const autolink = {
   name: 'autolink-demo',
