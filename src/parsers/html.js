@@ -121,7 +121,7 @@ function parseStyleMap(styleStr = '') {
   return map;
 }
 
-function extractMeta(attrs) {
+function extractStyleMeta(attrs) {
   const style = parseStyleMap(getAttr('style', attrs));
 
   const colorAttr = getAttr('color', attrs);
@@ -130,9 +130,9 @@ function extractMeta(attrs) {
   const sizeAttr = getAttr('size', attrs);
   if (sizeAttr && !style['font-size']) style['font-size'] = sizeAttr;
 
-  const className = getAttr('class', attrs);
+  const className = (getAttr('class', attrs) || '').trim() || null;
 
-  return { style, className: className || null };
+  return { style, className };
 }
 
 const BLOCK_TYPES = new Set([
@@ -156,6 +156,15 @@ function applyInlineStyle(children = [], style = {}) {
   return res;
 }
 
+function mergeStyle(existing, incoming) {
+  if (!incoming) return existing || null;
+  const out = { ...(incoming || {}) };
+  if (existing) {
+    for (const k of Object.keys(existing)) out[k] = existing[k];
+  }
+  return out;
+}
+
 function wrapByStyle(nodes = [], style = null) {
   if (!style || nodes.length === 0) return nodes;
 
@@ -168,15 +177,16 @@ function wrapByStyle(nodes = [], style = null) {
 
     switch (n.type) {
       case 'Paragraph':
-        return {
-          ...n,
-          style: { ...(n.style || {}), ...(style || {}) },
-        };
+        return { ...n, style: mergeStyle(n.style, style) };
 
       case 'ListItem':
       case 'List':
       case 'Blockquote':
-        return { ...n, children: (n.children || []).map(mapNode) };
+        return {
+          ...n,
+          style: mergeStyle(n.style, style),
+          children: (n.children || []).map(mapNode),
+        };
 
       case 'Heading':
       case 'CodeBlock':
@@ -226,34 +236,34 @@ export function parseHTML(input = '') {
       a: () => {
         const href = sanitizeUrl(getAttr('href', attrs));
         const title = getAttr('title', attrs) || null;
-        const meta = { href, title, ...extractMeta(attrs) };
+        const meta = { href, title, ...extractStyleMeta(attrs) };
         pushFrame('a', meta);
       },
-      span: () => pushFrame('span', extractMeta(attrs)),
-      font: () => pushFrame('font', extractMeta(attrs)),
+      span: () => pushFrame('span', extractStyleMeta(attrs)),
+      font: () => pushFrame('font', extractStyleMeta(attrs)),
 
-      b: () => pushFrame('b', extractMeta(attrs)),
-      strong: () => pushFrame('strong', extractMeta(attrs)),
-      i: () => pushFrame('i', extractMeta(attrs)),
-      em: () => pushFrame('em', extractMeta(attrs)),
-      u: () => pushFrame('u', extractMeta(attrs)),
-      s: () => pushFrame('s', extractMeta(attrs)),
-      strike: () => pushFrame('strike', extractMeta(attrs)),
+      b: () => pushFrame('b', extractStyleMeta(attrs)),
+      strong: () => pushFrame('strong', extractStyleMeta(attrs)),
+      i: () => pushFrame('i', extractStyleMeta(attrs)),
+      em: () => pushFrame('em', extractStyleMeta(attrs)),
+      u: () => pushFrame('u', extractStyleMeta(attrs)),
+      s: () => pushFrame('s', extractStyleMeta(attrs)),
+      strike: () => pushFrame('strike', extractStyleMeta(attrs)),
       code: () => pushFrame('code'),
 
-      p: () => pushFrame('p', extractMeta(attrs)),
-      div: () => pushFrame('div', extractMeta(attrs)),
-      blockquote: () => pushFrame('blockquote', extractMeta(attrs)),
-      ul: () => pushFrame('ul', extractMeta(attrs)),
-      ol: () => pushFrame('ol', extractMeta(attrs)),
-      li: () => pushFrame('li', extractMeta(attrs)),
-      pre: () => pushFrame('pre', extractMeta(attrs)),
-      h1: () => pushFrame('h1', extractMeta(attrs)),
-      h2: () => pushFrame('h2', extractMeta(attrs)),
-      h3: () => pushFrame('h3', extractMeta(attrs)),
-      h4: () => pushFrame('h4', extractMeta(attrs)),
-      h5: () => pushFrame('h5', extractMeta(attrs)),
-      h6: () => pushFrame('h6', extractMeta(attrs)),
+      p: () => pushFrame('p', extractStyleMeta(attrs)),
+      div: () => pushFrame('div', extractStyleMeta(attrs)),
+      blockquote: () => pushFrame('blockquote', extractStyleMeta(attrs)),
+      ul: () => pushFrame('ul', extractStyleMeta(attrs)),
+      ol: () => pushFrame('ol', extractStyleMeta(attrs)),
+      li: () => pushFrame('li', extractStyleMeta(attrs)),
+      pre: () => pushFrame('pre', extractStyleMeta(attrs)),
+      h1: () => pushFrame('h1', extractStyleMeta(attrs)),
+      h2: () => pushFrame('h2', extractStyleMeta(attrs)),
+      h3: () => pushFrame('h3', extractStyleMeta(attrs)),
+      h4: () => pushFrame('h4', extractStyleMeta(attrs)),
+      h5: () => pushFrame('h5', extractStyleMeta(attrs)),
+      h6: () => pushFrame('h6', extractStyleMeta(attrs)),
     };
     (START[tag] || (() => {}))();
   }
@@ -283,19 +293,39 @@ export function parseHTML(input = '') {
 
       b: () => {
         const f = popToTag('b');
-        if (f) pushChild(strong(wrapByStyle(f.children, f.meta?.style)));
+        if (f) {
+          const node = strong(wrapByStyle(f.children, f.meta?.style));
+          node._tag = 'b';
+          if (f.meta?.className) node.className = f.meta.className;
+          pushChild(node);
+        }
       },
       strong: () => {
         const f = popToTag('strong');
-        if (f) pushChild(strong(wrapByStyle(f.children, f.meta?.style)));
+        if (f) {
+          const node = strong(wrapByStyle(f.children, f.meta?.style));
+          node._tag = 'strong';
+          if (f.meta?.className) node.className = f.meta.className;
+          pushChild(node);
+        }
       },
       i: () => {
         const f = popToTag('i');
-        if (f) pushChild(emphasis(wrapByStyle(f.children, f.meta?.style)));
+        if (f) {
+          const node = emphasis(wrapByStyle(f.children, f.meta?.style));
+          node._tag = 'i';
+          if (f.meta?.className) node.className = f.meta.className;
+          pushChild(node);
+        }
       },
       em: () => {
         const f = popToTag('em');
-        if (f) pushChild(emphasis(wrapByStyle(f.children, f.meta?.style)));
+        if (f) {
+          const node = emphasis(wrapByStyle(f.children, f.meta?.style));
+          node._tag = 'em';
+          if (f.meta?.className) node.className = f.meta.className;
+          pushChild(node);
+        }
       },
       u: () => {
         const f = popToTag('u');
@@ -317,42 +347,32 @@ export function parseHTML(input = '') {
       p: () => {
         const f = popToTag('p');
         if (!f) return;
-        const para = paragraph(f.children);
-        if (f.meta?.className) para.className = f.meta.className;
-        const st = f.meta?.style || null;
-        if (st && (st.color || st['font-size'])) {
-          para.style = { ...(para.style || {}), ...st };
-        }
-        pushChild(para);
+        const node = paragraph(f.children);
+        if (f.meta?.style) node.style = f.meta.style;
+        if (f.meta?.className) node.className = f.meta.className;
+        pushChild(node);
       },
-
       div: () => {
         const f = popToTag('div');
         if (!f) return;
-        let blocks = finalizeRoot(f.children);
-
-        const st = f.meta?.style || null;
-        if (st && (st.color || st['font-size'])) {
-          blocks = blocks.map((n) => {
-            if (n && n.type === 'Paragraph') {
-              return { ...n, style: { ...(n.style || {}), ...st } };
-            }
-            return n;
-          });
-        }
-        blocks.forEach(pushChild);
+        const kids = wrapByStyle(f.children, f.meta?.style);
+        finalizeRoot(kids).forEach(pushChild);
       },
-
       blockquote: () => {
         const f = popToTag('blockquote');
         if (!f) return;
-        const kids = ensureParagraphs(wrapByStyle(f.children, f.meta?.style));
-        pushChild(blockquote(kids));
+        const node = blockquote(ensureParagraphs(wrapByStyle(f.children, f.meta?.style)));
+        if (f.meta?.style) node.style = mergeStyle(node.style, f.meta.style);
+        if (f.meta?.className) node.className = f.meta.className;
+        pushChild(node);
       },
       li: () => {
         const f = popToTag('li');
         if (!f) return;
-        pushChild(listItem(ensureParagraphs(wrapByStyle(f.children, f.meta?.style))));
+        const node = listItem(ensureParagraphs(wrapByStyle(f.children, f.meta?.style)));
+        if (f.meta?.style) node.style = mergeStyle(node.style, f.meta.style);
+        if (f.meta?.className) node.className = f.meta.className;
+        pushChild(node);
       },
       ul: () => {
         const f = popToTag('ul');
@@ -360,7 +380,10 @@ export function parseHTML(input = '') {
         const items = (f.children || []).map((c) =>
           c.type === 'ListItem' ? c : listItem(ensureParagraphs([c]))
         );
-        pushChild(list(false, items));
+        const node = list(false, items);
+        if (f.meta?.style) node.style = mergeStyle(node.style, f.meta.style);
+        if (f.meta?.className) node.className = f.meta.className;
+        pushChild(node);
       },
       ol: () => {
         const f = popToTag('ol');
@@ -368,7 +391,10 @@ export function parseHTML(input = '') {
         const items = (f.children || []).map((c) =>
           c.type === 'ListItem' ? c : listItem(ensureParagraphs([c]))
         );
-        pushChild(list(true, items));
+        const node = list(true, items);
+        if (f.meta?.style) node.style = mergeStyle(node.style, f.meta.style);
+        if (f.meta?.className) node.className = f.meta.className;
+        pushChild(node);
       },
       pre: () => {
         const f = popToTag('pre');
@@ -376,27 +402,51 @@ export function parseHTML(input = '') {
       },
       h1: () => {
         const f = popToTag('h1');
-        if (f) pushChild(heading(getText(f.children).trim(), 1));
+        if (f) {
+          const n = heading(getText(f.children).trim(), 1);
+          if (f.meta?.className) n.className = f.meta.className;
+          pushChild(n);
+        }
       },
       h2: () => {
         const f = popToTag('h2');
-        if (f) pushChild(heading(getText(f.children).trim(), 2));
+        if (f) {
+          const n = heading(getText(f.children).trim(), 2);
+          if (f.meta?.className) n.className = f.meta.className;
+          pushChild(n);
+        }
       },
       h3: () => {
         const f = popToTag('h3');
-        if (f) pushChild(heading(getText(f.children).trim(), 3));
+        if (f) {
+          const n = heading(getText(f.children).trim(), 3);
+          if (f.meta?.className) n.className = f.meta.className;
+          pushChild(n);
+        }
       },
       h4: () => {
         const f = popToTag('h4');
-        if (f) pushChild(heading(getText(f.children).trim(), 4));
+        if (f) {
+          const n = heading(getText(f.children).trim(), 4);
+          if (f.meta?.className) n.className = f.meta.className;
+          pushChild(n);
+        }
       },
       h5: () => {
         const f = popToTag('h5');
-        if (f) pushChild(heading(getText(f.children).trim(), 5));
+        if (f) {
+          const n = heading(getText(f.children).trim(), 5);
+          if (f.meta?.className) n.className = f.meta.className;
+          pushChild(n);
+        }
       },
       h6: () => {
         const f = popToTag('h6');
-        if (f) pushChild(heading(getText(f.children).trim(), 6));
+        if (f) {
+          const n = heading(getText(f.children).trim(), 6);
+          if (f.meta?.className) n.className = f.meta.className;
+          pushChild(n);
+        }
       },
     };
     (CLOSE[tag] || (() => {}))();

@@ -3,42 +3,56 @@ import * as U from '../core/utils.js';
 
 export function renderHTML(ast, opts = {}) {
   const { safe = true, linkRel = 'noopener noreferrer nofollow', linkTarget = null } = opts;
+  const normalize = Boolean(opts.normalizeHtml);
+  const preserveTags = Boolean(opts.preserveTags);
 
-  const renderParagraphOpen = (n) => {
-    const cls = n.className ? ` class="${U.escapeAttr(n.className)}"` : '';
-    const styleObj = n.style || null;
-    const styleParts = [];
+  const styleAttr = (style) => {
+    if (!style) return '';
+    const parts = [];
 
-    if (styleObj && styleObj.color) {
-      const color =
-        typeof U.sanitizeColor === 'function' ? U.sanitizeColor(styleObj.color) : styleObj.color;
-      if (color) styleParts.push(`color:${U.escapeAttr(color)}`);
+    const add = (k, v) => {
+      if (!v) return;
+      parts.push(`${k}:${U.escapeAttr(v)}`);
+    };
+
+    if (style['font-size']) {
+      const v =
+        safe && typeof U.sanitizeFontSize === 'function'
+          ? U.sanitizeFontSize(style['font-size'])
+          : style['font-size'];
+      if (v) add('font-size', v);
     }
-    if (styleObj && styleObj['font-size']) {
-      const fs =
-        typeof U.sanitizeFontSize === 'function'
-          ? U.sanitizeFontSize(styleObj['font-size'])
-          : styleObj['font-size'];
-      if (fs) styleParts.push(`font-size:${U.escapeAttr(fs)}`);
+    if (style.color) {
+      const v =
+        safe && typeof U.sanitizeColor === 'function' ? U.sanitizeColor(style.color) : style.color;
+      if (v) add('color', v);
     }
 
-    const styleAttr = styleParts.length ? ` style="${styleParts.join(';')}"` : '';
-    return `<p${cls}${styleAttr}>`;
+    return parts.length ? ` style="${parts.join(';')}"` : '';
   };
+
+  const classAttr = (n) => (n && n.className ? ` class="${U.escapeAttr(n.className)}"` : '');
 
   const h = {
     Document: (n, _c, r) => n.children.map(r).join('\n'),
-    Paragraph: (n, _c, r) => `${renderParagraphOpen(n)}${n.children.map(r).join('')}</p>`,
+    Paragraph: (n, _c, r) =>
+      `<p${classAttr(n)}${styleAttr(n.style)}>${n.children.map(r).join('')}</p>`,
     Text: (n) => U.escapeHtml(n.value ?? ''),
     Heading: (n) => {
       const d = n.depth ?? 1;
-      return `<h${d}>${U.escapeHtml(n.value ?? '')}</h${d}>`;
+      return `<h${d}${classAttr(n)}>${U.escapeHtml(n.value ?? '')}</h${d}>`;
     },
     ThematicBreak: () => `<hr/>`,
-    Strong: (n, _c, r) => `<strong>${n.children.map(r).join('')}</strong>`,
-    Emphasis: (n, _c, r) => `<em>${n.children.map(r).join('')}</em>`,
-    Underline: (n, _c, r) => `<u>${n.children.map(r).join('')}</u>`,
-    Strike: (n, _c, r) => `<s>${n.children.map(r).join('')}</s>`,
+    Strong: (n, _c, r) => {
+      const tag = preserveTags && !normalize && n._tag === 'b' ? 'b' : 'strong';
+      return `<${tag}${classAttr(n)}>${n.children.map(r).join('')}</${tag}>`;
+    },
+    Emphasis: (n, _c, r) => {
+      const tag = preserveTags && !normalize && n._tag === 'i' ? 'i' : 'em';
+      return `<${tag}${classAttr(n)}>${n.children.map(r).join('')}</${tag}>`;
+    },
+    Underline: (n, _c, r) => `<u${classAttr(n)}>${n.children.map(r).join('')}</u>`,
+    Strike: (n, _c, r) => `<s${classAttr(n)}>${n.children.map(r).join('')}</s>`,
     InlineCode: (n) => `<code>${U.escapeHtml(n.value ?? '')}</code>`,
     CodeBlock: (n) => `<pre><code>${U.escapeHtml(n.value ?? '')}</code></pre>`,
     LineBreak: () => `<br/>`,
@@ -58,17 +72,19 @@ export function renderHTML(ast, opts = {}) {
       return `<img src="${U.escapeAttr(src)}"${alt}>`;
     },
 
-    Blockquote: (n, _c, r) => `<blockquote>${n.children.map(r).join('')}</blockquote>`,
+    Blockquote: (n, _c, r) =>
+      `<blockquote${classAttr(n)}${styleAttr(n.style)}>${n.children.map(r).join('')}</blockquote>`,
     Quote: (n, _c, r) => {
       const a = n.author ? ` data-author="${U.escapeAttr(n.author)}"` : '';
-      return `<blockquote${a}>${n.children.map(r).join('')}</blockquote>`;
+      return `<blockquote${a}${classAttr(n)}>${n.children.map(r).join('')}</blockquote>`;
     },
 
     List: (n, _c, r) => {
       const tag = n.ordered ? 'ol' : 'ul';
-      return `<${tag}>${n.children.map(r).join('')}</${tag}>`;
+      return `<${tag}${classAttr(n)}${styleAttr(n.style)}>${n.children.map(r).join('')}</${tag}>`;
     },
-    ListItem: (n, _c, r) => `<li>${n.children.map(r).join('')}</li>`,
+    ListItem: (n, _c, r) =>
+      `<li${classAttr(n)}${styleAttr(n.style)}>${n.children.map(r).join('')}</li>`,
 
     Spoiler: (n, _c, r) => {
       const summary = `<summary>${U.escapeHtml(n.label ?? 'Спойлер')}</summary>`;

@@ -10,20 +10,15 @@ import { visit } from './core/visitor.js';
 import * as U from './core/utils.js';
 import * as N from './ast/nodes.js';
 
-const parseHTML = HTMLParser.parseHTML || HTMLParser.parse || HTMLParser.default;
-const parseMarkdown = MDParser.parseMarkdown || MDParser.parse || MDParser.default;
-const parseBBCode = BBParser.parseBBCode || BBParser.parse || BBParser.default;
-const parsePlain =
-  PlainParser.parsePlain || PlainParser.parsePlaintext || PlainParser.parse || PlainParser.default;
+const parseHTML = HTMLParser.parseHTML;
+const parseMarkdown = MDParser.parseMarkdown;
+const parseBBCode = BBParser.parseBBCode;
+const parsePlain = PlainParser.parsePlaintext;
 
-const renderHTML = HTMLRenderer.renderHTML || HTMLRenderer.render || HTMLRenderer.default;
-const renderMarkdown = MDRenderer.renderMarkdown || MDRenderer.render || MDRenderer.default;
-const renderBBCode = BBRenderer.renderBBCode || BBRenderer.render || BBRenderer.default;
-const renderPlain =
-  PlainRenderer.renderPlain ||
-  PlainRenderer.renderPlaintext ||
-  PlainRenderer.render ||
-  PlainRenderer.default;
+const renderHTML = HTMLRenderer.renderHTML;
+const renderMarkdown = MDRenderer.renderMarkdown;
+const renderBBCode = BBRenderer.renderBBCode;
+const renderPlain = PlainRenderer.renderPlaintext;
 
 const PARSERS = {
   html: parseHTML,
@@ -52,9 +47,7 @@ function builtinAutolink(ast) {
     const parts = [];
     let last = 0;
     value.replace(URL_RE, (m, _1, offset) => {
-      if (offset > last) {
-        parts.push(N.text(value.slice(last, offset)));
-      }
+      if (offset > last) parts.push(N.text(value.slice(last, offset)));
       const safe = U.sanitizeUrl ? U.sanitizeUrl(m) : m;
       const href = safe === '#' ? '#' : String(safe);
       parts.push(N.link(href, [N.text(m)]));
@@ -73,19 +66,15 @@ function builtinAutolink(ast) {
       case 'InlineCode':
       case 'CodeBlock':
         return node;
-
       case 'Link':
         return { ...node, children: (node.children || []).map((c) => walk(c, true)) };
-
       default:
         if (Array.isArray(node)) return node.map((n) => walk(n, inLinkOrCode));
-
         if (node.type === 'Text' && !inLinkOrCode) {
           const split = splitTextToNodes(node.value || '');
           if (split) return split;
           return node;
         }
-
         if (node.children && node.children.length) {
           const mapped = [];
           for (const ch of node.children) {
@@ -99,8 +88,7 @@ function builtinAutolink(ast) {
     }
   };
 
-  const res = walk(ast, false);
-  return res;
+  return walk(ast, false);
 }
 
 function builtinEmoji(ast) {
@@ -111,22 +99,18 @@ function builtinEmoji(ast) {
 
   const walk = (node, inCode = false) => {
     if (!node) return node;
-
     switch (node.type) {
       case 'InlineCode':
       case 'CodeBlock':
         return node;
-
       default:
         if (Array.isArray(node)) return node.map((n) => walk(n, inCode));
-
         if (node.type === 'Text' && !inCode) {
           const v = String(node.value || '');
           const nv = transformText(v);
           if (nv !== v) return { ...node, value: nv };
           return node;
         }
-
         if (node.children && node.children.length) {
           return { ...node, children: node.children.map((ch) => walk(ch, inCode)) };
         }
@@ -147,28 +131,18 @@ function preparePlugin(raw, ctx) {
   if (typeof raw === 'function') {
     try {
       const maybe = raw(ctx);
-      if (typeof maybe === 'function') {
-        return (ast) => maybe(ast, ctx) || ast;
-      }
-      if (maybe && typeof maybe.run === 'function') {
-        return (ast) => maybe.run(ast, ctx) || ast;
-      }
+      if (typeof maybe === 'function') return (ast) => maybe(ast, ctx) || ast;
+      if (maybe && typeof maybe.run === 'function') return (ast) => maybe.run(ast, ctx) || ast;
     } catch {
-      // игнор, попробуем дальше
+      // ignore
     }
-
     try {
       const maybe = raw();
-      if (typeof maybe === 'function') {
-        return (ast) => maybe(ast, ctx) || ast;
-      }
-      if (maybe && typeof maybe.run === 'function') {
-        return (ast) => maybe.run(ast, ctx) || ast;
-      }
+      if (typeof maybe === 'function') return (ast) => maybe(ast, ctx) || ast;
+      if (maybe && typeof maybe.run === 'function') return (ast) => maybe.run(ast, ctx) || ast;
     } catch {
-      // игнор, попробуем как трансформер
+      // ignore
     }
-
     return (ast) => raw(ast, ctx) || ast;
   }
 
@@ -191,7 +165,6 @@ function runPlugins(ast, plugins = [], opts = {}) {
   if (!plugins || !plugins.length) return ast;
 
   const ctx = { ...opts, visit, utils: U, nodes: N };
-
   let out = ast;
 
   const prepared = [];
@@ -203,9 +176,7 @@ function runPlugins(ast, plugins = [], opts = {}) {
     if (fn) prepared.push(fn);
   }
 
-  for (const fn of prepared) {
-    out = fn(out);
-  }
+  for (const fn of prepared) out = fn(out);
 
   const hasAutolink = names.some((n) => n.includes('autolink'));
   const hasEmoji = names.some((n) => n.includes('emoji'));
@@ -239,22 +210,26 @@ export function convert(input, opts = {}) {
   const to = (opts.to || 'plaintext').toLowerCase();
 
   const safeEffective = opts.safe !== undefined ? Boolean(opts.safe) : true;
-
   const plugins = [...GLOBAL_PLUGINS, ...(opts.plugins || [])];
+  const forcePassthrough = Boolean(opts.htmlPassthrough);
 
   if (
     from === 'html' &&
     to === 'html' &&
-    !safeEffective &&
-    plugins.length === 0 &&
-    !opts.normalizeHtml
+    (forcePassthrough || (!safeEffective && !opts.normalizeHtml))
   ) {
     return String(input ?? '');
   }
 
   const ast = parse(input, opts);
   const ast2 = runPlugins(ast, plugins, opts);
-  return render(ast2, opts);
+
+  const renderOpts =
+    from === 'html' && to === 'html' && !opts.normalizeHtml
+      ? { ...opts, preserveTags: opts.preserveTags ?? true }
+      : opts;
+
+  return render(ast2, renderOpts);
 }
 
 export default { convert, parse, render, use };
