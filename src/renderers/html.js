@@ -20,6 +20,7 @@ export function renderHTML(ast, opts = {}) {
     InlineCode: (n) => `<code>${U.escapeHtml(n.value ?? '')}</code>`,
     CodeBlock: (n) => `<pre><code>${U.escapeHtml(n.value ?? '')}</code></pre>`,
     LineBreak: () => `<br/>`,
+
     Link: (n, _c, r) => {
       const href = safe ? U.sanitizeUrl(n.href) : String(n.href || '');
       const title = n.title ? ` title="${U.escapeAttr(n.title)}"` : '';
@@ -34,20 +35,37 @@ export function renderHTML(ast, opts = {}) {
       const alt = n.alt ? ` alt="${U.escapeAttr(n.alt)}"` : ' alt=""';
       return `<img src="${U.escapeAttr(src)}"${alt}>`;
     },
+
     Blockquote: (n, _c, r) => `<blockquote>${n.children.map(r).join('')}</blockquote>`,
     Quote: (n, _c, r) => {
       const a = n.author ? ` data-author="${U.escapeAttr(n.author)}"` : '';
       return `<blockquote${a}>${n.children.map(r).join('')}</blockquote>`;
     },
+
     List: (n, _c, r) => {
       const tag = n.ordered ? 'ol' : 'ul';
       return `<${tag}>${n.children.map(r).join('')}</${tag}>`;
     },
     ListItem: (n, _c, r) => `<li>${n.children.map(r).join('')}</li>`,
+
     Spoiler: (n, _c, r) => {
       const summary = `<summary>${U.escapeHtml(n.label ?? 'Спойлер')}</summary>`;
       return `<details>${summary}${n.children.map(r).join('')}</details>`;
     },
+
+    Color: (n, _c, r) => {
+      const inner = n.children.map(r).join('');
+      const val = typeof U.sanitizeColor === 'function' ? U.sanitizeColor(n.value) : null;
+      if (!val) return inner;
+      return `<span style="color:${U.escapeAttr(val)}">${inner}</span>`;
+    },
+    Size: (n, _c, r) => {
+      const inner = n.children.map(r).join('');
+      const css = typeof U.sanitizeFontSize === 'function' ? U.sanitizeFontSize(n.value) : null;
+      if (!css) return inner;
+      return `<span style="font-size:${U.escapeAttr(css)}">${inner}</span>`;
+    },
+
     __unknown: () => '',
   };
 

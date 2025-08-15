@@ -13,6 +13,8 @@ import {
   list,
   listItem,
   spoiler,
+  color as colorNode,
+  size as sizeNode,
 } from '../ast/nodes.js';
 
 function findMatching(src, tag, from) {
@@ -43,11 +45,8 @@ function parseInline(src) {
   let i = 0;
 
   const pushText = (s) => {
-    if (!s) return;
-    out.push(text(s));
+    if (s) out.push(text(s));
   };
-
-  const inlineSet = new Set(['b', 'i', 'u', 's', 'url', 'img', 'spoiler']);
 
   while (i < src.length) {
     const lb = src.indexOf('[', i);
@@ -65,7 +64,6 @@ function parseInline(src) {
 
     const raw = src.slice(lb + 1, rb);
     const rawLower = raw.toLowerCase();
-
     if (rawLower.startsWith('/')) {
       pushText(src.slice(lb, rb + 1));
       i = rb + 1;
@@ -76,7 +74,24 @@ function parseInline(src) {
     const name = (eq === -1 ? raw : raw.slice(0, eq)).trim().toLowerCase();
     const arg = eq === -1 ? '' : raw.slice(eq + 1).trim();
 
-    if (!inlineSet.has(name)) {
+    const HANDLERS = {
+      b: (arg, inner) => strong(parseInline(inner)),
+      i: (arg, inner) => emphasis(parseInline(inner)),
+      u: (arg, inner) => underline(parseInline(inner)),
+      s: (arg, inner) => strike(parseInline(inner)),
+      img: (arg, inner) => image(arg || inner.trim(), ''),
+      url: (arg, inner) => {
+        const href = arg || inner.trim();
+        const kids = arg ? parseInline(inner) : [text(inner)];
+        return link(href, kids);
+      },
+      spoiler: (arg, inner) => spoiler(parseInline(inner), arg || null),
+      color: (arg, inner) => colorNode((arg || '').trim(), parseInline(inner)),
+      size: (arg, inner) => sizeNode((arg || '').trim(), parseInline(inner)),
+    };
+
+    const handler = HANDLERS[name];
+    if (!handler) {
       pushText(src.slice(lb, rb + 1));
       i = rb + 1;
       continue;
@@ -90,29 +105,9 @@ function parseInline(src) {
     }
 
     const inner = src.slice(rb + 1, match.start);
-    const after = match.end;
+    out.push(handler(arg, inner));
 
-    if (name === 'b') {
-      out.push(strong(parseInline(inner)));
-    } else if (name === 'i') {
-      out.push(emphasis(parseInline(inner)));
-    } else if (name === 'u') {
-      out.push(underline(parseInline(inner)));
-    } else if (name === 's') {
-      out.push(strike(parseInline(inner)));
-    } else if (name === 'img') {
-      const srcUrl = arg || inner.trim();
-      out.push(image(srcUrl, ''));
-    } else if (name === 'url') {
-      const href = arg || inner.trim();
-      const textChildren = arg ? parseInline(inner) : [text(inner)];
-      out.push(link(href, textChildren));
-    } else if (name === 'spoiler') {
-      const label = arg || null;
-      out.push(spoiler(parseInline(inner), label));
-    }
-
-    i = after;
+    i = match.end;
   }
 
   return out;

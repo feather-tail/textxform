@@ -16,6 +16,8 @@ import {
   heading,
   thematicBreak,
   lineBreak,
+  color as colorNode,
+  size as sizeNode,
 } from '../ast/nodes.js';
 import { sanitizeUrl } from '../core/utils.js';
 
@@ -53,6 +55,8 @@ function getText(nodes) {
       case 'ListItem':
       case 'List':
       case 'Spoiler':
+      case 'Color':
+      case 'Size':
         (n.children || []).forEach(walk);
         break;
       case 'InlineCode':
@@ -102,6 +106,40 @@ function finalizeRoot(children) {
   return out;
 }
 
+function parseStyleMap(styleStr = '') {
+  const map = {};
+  String(styleStr)
+    .split(';')
+    .forEach((pair) => {
+      const i = pair.indexOf(':');
+      if (i > 0) {
+        const k = pair.slice(0, i).trim().toLowerCase();
+        const val = pair.slice(i + 1).trim();
+        if (k) map[k] = val;
+      }
+    });
+  return map;
+}
+
+function extractStyleMeta(attrs) {
+  const style = parseStyleMap(getAttr('style', attrs));
+
+  const colorAttr = getAttr('color', attrs);
+  if (colorAttr && !style.color) style.color = colorAttr;
+
+  const sizeAttr = getAttr('size', attrs);
+  if (sizeAttr && !style['font-size']) style['font-size'] = sizeAttr;
+
+  return { style };
+}
+
+function wrapByStyle(children, st) {
+  let nodes = children || [];
+  if (st && st['font-size']) nodes = [sizeNode(st['font-size'], nodes)];
+  if (st && st.color) nodes = [colorNode(st.color, nodes)];
+  return nodes;
+}
+
 export function parseHTML(input = '') {
   const src = String(input);
   const root = { tag: '#root', children: [] };
@@ -125,155 +163,172 @@ export function parseHTML(input = '') {
     return null;
   };
 
-  const handleStartTag = (tag, attrs) => {
-    switch (tag) {
-      case 'br':
-        pushChild(lineBreak());
-        return;
-      case 'hr':
-        pushChild(thematicBreak());
-        return;
-      case 'img': {
+  function handleStartTag(tag, attrs) {
+    const START = {
+      br: () => pushChild(lineBreak()),
+      hr: () => pushChild(thematicBreak()),
+      img: () => {
         const s = sanitizeUrl(getAttr('src', attrs));
         const alt = getAttr('alt', attrs);
         if (s !== '#') pushChild(image(s, alt));
-        return;
-      }
-      case 'a': {
+      },
+      a: () => {
         const href = sanitizeUrl(getAttr('href', attrs));
         const title = getAttr('title', attrs) || null;
-        pushFrame('a', { href, title });
-        return;
-      }
-      case 'b':
-      case 'strong':
-      case 'i':
-      case 'em':
-      case 'u':
-      case 's':
-      case 'strike':
-      case 'code':
-        pushFrame(tag);
-        return;
-      case 'p':
-      case 'blockquote':
-      case 'ul':
-      case 'ol':
-      case 'li':
-      case 'pre':
-      case 'h1':
-      case 'h2':
-      case 'h3':
-      case 'h4':
-      case 'h5':
-      case 'h6':
-        pushFrame(tag);
-        return;
-      default:
-        return;
-    }
-  };
+        const meta = { href, title, ...extractStyleMeta(attrs) };
+        pushFrame('a', meta);
+      },
+      span: () => {
+        pushFrame('span', extractStyleMeta(attrs));
+      },
+      font: () => {
+        pushFrame('font', extractStyleMeta(attrs));
+      },
 
-  const handleCloseTag = (tag) => {
-    switch (tag) {
-      case 'a': {
-        const frame = popToTag('a');
-        if (!frame) return;
-        const { href, title } = frame.meta || {};
-        pushChild(link(href || '#', frame.children, title));
-        return;
-      }
-      case 'b':
-      case 'strong': {
-        const f = popToTag(tag);
+      b: () => pushFrame('b', extractStyleMeta(attrs)),
+      strong: () => pushFrame('strong', extractStyleMeta(attrs)),
+      i: () => pushFrame('i', extractStyleMeta(attrs)),
+      em: () => pushFrame('em', extractStyleMeta(attrs)),
+      u: () => pushFrame('u', extractStyleMeta(attrs)),
+      s: () => pushFrame('s', extractStyleMeta(attrs)),
+      strike: () => pushFrame('strike', extractStyleMeta(attrs)),
+      code: () => pushFrame('code'),
+
+      p: () => pushFrame('p', extractStyleMeta(attrs)),
+      blockquote: () => pushFrame('blockquote', extractStyleMeta(attrs)),
+      ul: () => pushFrame('ul', extractStyleMeta(attrs)),
+      ol: () => pushFrame('ol', extractStyleMeta(attrs)),
+      li: () => pushFrame('li', extractStyleMeta(attrs)),
+      pre: () => pushFrame('pre', extractStyleMeta(attrs)),
+      h1: () => pushFrame('h1', extractStyleMeta(attrs)),
+      h2: () => pushFrame('h2', extractStyleMeta(attrs)),
+      h3: () => pushFrame('h3', extractStyleMeta(attrs)),
+      h4: () => pushFrame('h4', extractStyleMeta(attrs)),
+      h5: () => pushFrame('h5', extractStyleMeta(attrs)),
+      h6: () => pushFrame('h6', extractStyleMeta(attrs)),
+    };
+    (START[tag] || (() => {}))();
+  }
+
+  function handleCloseTag(tag) {
+    const CLOSE = {
+      a: () => {
+        const f = popToTag('a');
         if (!f) return;
-        pushChild(strong(f.children));
-        return;
-      }
-      case 'i':
-      case 'em': {
-        const f = popToTag(tag);
+        const { href, title, style } = f.meta || {};
+        const kids = wrapByStyle(f.children, style);
+        pushChild(link(href || '#', kids, title));
+      },
+
+      span: () => {
+        const f = popToTag('span');
         if (!f) return;
-        pushChild(emphasis(f.children));
-        return;
-      }
-      case 'u': {
+        const kids = wrapByStyle(f.children, f.meta && f.meta.style);
+        (kids.length === 1 ? [kids[0]] : kids).forEach(pushChild);
+      },
+      font: () => {
+        const f = popToTag('font');
+        if (!f) return;
+        const kids = wrapByStyle(f.children, f.meta && f.meta.style);
+        (kids.length === 1 ? [kids[0]] : kids).forEach(pushChild);
+      },
+
+      // inline
+      b: () => {
+        const f = popToTag('b');
+        if (f) pushChild(strong(wrapByStyle(f.children, f.meta?.style)));
+      },
+      strong: () => {
+        const f = popToTag('strong');
+        if (f) pushChild(strong(wrapByStyle(f.children, f.meta?.style)));
+      },
+      i: () => {
+        const f = popToTag('i');
+        if (f) pushChild(emphasis(wrapByStyle(f.children, f.meta?.style)));
+      },
+      em: () => {
+        const f = popToTag('em');
+        if (f) pushChild(emphasis(wrapByStyle(f.children, f.meta?.style)));
+      },
+      u: () => {
         const f = popToTag('u');
-        if (!f) return;
-        pushChild(underline(f.children));
-        return;
-      }
-      case 's':
-      case 'strike': {
-        const f = popToTag(tag);
-        if (!f) return;
-        pushChild(strike(f.children));
-        return;
-      }
-      case 'code': {
+        if (f) pushChild(underline(wrapByStyle(f.children, f.meta?.style)));
+      },
+      s: () => {
+        const f = popToTag('s');
+        if (f) pushChild(strike(wrapByStyle(f.children, f.meta?.style)));
+      },
+      strike: () => {
+        const f = popToTag('strike');
+        if (f) pushChild(strike(wrapByStyle(f.children, f.meta?.style)));
+      },
+      code: () => {
         const f = popToTag('code');
-        if (!f) return;
-        pushChild(inlineCode(getText(f.children)));
-        return;
-      }
-      case 'p': {
+        if (f) pushChild(inlineCode(getText(f.children)));
+      },
+
+      // block
+      p: () => {
         const f = popToTag('p');
-        if (!f) return;
-        pushChild(paragraph(f.children));
-        return;
-      }
-      case 'blockquote': {
+        if (f) pushChild(paragraph(wrapByStyle(f.children, f.meta?.style)));
+      },
+      blockquote: () => {
         const f = popToTag('blockquote');
         if (!f) return;
-        pushChild(blockquote(ensureParagraphs(f.children)));
-        return;
-      }
-      case 'li': {
+        pushChild(blockquote(ensureParagraphs(wrapByStyle(f.children, f.meta?.style))));
+      },
+      li: () => {
         const f = popToTag('li');
         if (!f) return;
-        pushChild(listItem(ensureParagraphs(f.children)));
-        return;
-      }
-      case 'ul': {
+        pushChild(listItem(ensureParagraphs(wrapByStyle(f.children, f.meta?.style))));
+      },
+      ul: () => {
         const f = popToTag('ul');
         if (!f) return;
         const items = (f.children || []).map((c) =>
           c.type === 'ListItem' ? c : listItem(ensureParagraphs([c]))
         );
         pushChild(list(false, items));
-        return;
-      }
-      case 'ol': {
+      },
+      ol: () => {
         const f = popToTag('ol');
         if (!f) return;
         const items = (f.children || []).map((c) =>
           c.type === 'ListItem' ? c : listItem(ensureParagraphs([c]))
         );
         pushChild(list(true, items));
-        return;
-      }
-      case 'pre': {
+      },
+      pre: () => {
         const f = popToTag('pre');
-        if (!f) return;
-        pushChild(codeBlock(getText(f.children)));
-        return;
-      }
-      case 'h1':
-      case 'h2':
-      case 'h3':
-      case 'h4':
-      case 'h5':
-      case 'h6': {
-        const f = popToTag(tag);
-        if (!f) return;
-        const depth = Number(tag.slice(1)) || 1;
-        pushChild(heading(getText(f.children).trim(), depth));
-        return;
-      }
-      default:
-        return;
-    }
-  };
+        if (f) pushChild(codeBlock(getText(f.children)));
+      },
+      h1: () => {
+        const f = popToTag('h1');
+        if (f) pushChild(heading(getText(f.children).trim(), 1));
+      },
+      h2: () => {
+        const f = popToTag('h2');
+        if (f) pushChild(heading(getText(f.children).trim(), 2));
+      },
+      h3: () => {
+        const f = popToTag('h3');
+        if (f) pushChild(heading(getText(f.children).trim(), 3));
+      },
+      h4: () => {
+        const f = popToTag('h4');
+        if (f) pushChild(heading(getText(f.children).trim(), 4));
+      },
+      h5: () => {
+        const f = popToTag('h5');
+        if (f) pushChild(heading(getText(f.children).trim(), 5));
+      },
+      h6: () => {
+        const f = popToTag('h6');
+        if (f) pushChild(heading(getText(f.children).trim(), 6));
+      },
+    };
+    (CLOSE[tag] || (() => {}))();
+  }
 
   const appendText = (raw) => {
     const s = decodeEntities(raw);
