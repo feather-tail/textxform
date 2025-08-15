@@ -1,12 +1,43 @@
 import { visit } from '../core/visitor.js';
 import * as U from '../core/utils.js';
 
+function hoistBlockStyle(children) {
+  let style = '';
+  let inner = children;
+
+  while (inner.length === 1 && (inner[0].type === 'Color' || inner[0].type === 'Size')) {
+    const node = inner[0];
+    if (node.type === 'Color') {
+      const val =
+        typeof U.sanitizeColor === 'function' ? U.sanitizeColor(node.value) : (node.value ?? '');
+      if (val) style += (style ? ';' : '') + `color:${String(val)}`;
+    } else if (node.type === 'Size') {
+      const css =
+        typeof U.sanitizeFontSize === 'function'
+          ? U.sanitizeFontSize(node.value)
+          : (node.value ?? '');
+      if (css) style += (style ? ';' : '') + `font-size:${String(css)}`;
+    }
+    inner = node.children || [];
+  }
+
+  return { style, children: inner };
+}
+
 export function renderHTML(ast, opts = {}) {
   const { safe = true, linkRel = 'noopener noreferrer nofollow', linkTarget = null } = opts;
 
   const h = {
     Document: (n, _c, r) => n.children.map(r).join('\n'),
-    Paragraph: (n, _c, r) => `<p>${n.children.map(r).join('')}</p>`,
+    Paragraph: (n, _c, r) => {
+      const tag = n.meta?.tag === 'div' ? 'div' : 'p';
+
+      const { style, children } = hoistBlockStyle(n.children || []);
+
+      const body = (children || []).map(r).join('');
+      const attrs = style ? ` style="${U.escapeAttr(style)}"` : '';
+      return `<${tag}${attrs}>${body}</${tag}>`;
+    },
     Text: (n) => U.escapeHtml(n.value ?? ''),
     Heading: (n) => {
       const d = n.depth ?? 1;

@@ -186,8 +186,6 @@ function wrapByStyle(nodes = [], style = null) {
   return nodes.map(mapNode);
 }
 
-/* ---------------- main parser ---------------- */
-
 export function parseHTML(input = '') {
   const src = String(input);
   const root = { tag: '#root', children: [] };
@@ -315,13 +313,21 @@ export function parseHTML(input = '') {
         const f = popToTag('p');
         if (!f) return;
         const kids = wrapByStyle(f.children, f.meta?.style);
-        pushChild(paragraph(kids));
+        const node = paragraph(kids);
+        node.meta = { ...(node.meta || {}), tag: 'p' };
+        pushChild(node);
       },
       div: () => {
         const f = popToTag('div');
         if (!f) return;
         const kids = wrapByStyle(f.children, f.meta?.style);
-        finalizeRoot(kids).forEach(pushChild);
+        if (hasBlock(kids)) {
+          finalizeRoot(kids).forEach(pushChild);
+        } else {
+          const node = paragraph(kids);
+          node.meta = { ...(node.meta || {}), tag: 'div' };
+          pushChild(node);
+        }
       },
       blockquote: () => {
         const f = popToTag('blockquote');
