@@ -30,6 +30,13 @@ export default [
   },
 
   {
+    files: ['docs/**/*.{js,mjs}'],
+    languageOptions: {
+      globals: { window: 'readonly', document: 'readonly', navigator: 'readonly' },
+    },
+  },
+
+  {
     files: ['commitlint.config.cjs'],
     languageOptions: {
       sourceType: 'commonjs',

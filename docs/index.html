@@ -1,0 +1,58 @@
+<!doctype html>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>textxform demo</title>
+<link rel="stylesheet" href="./style.css" />
+
+<header>
+  <h1>textxform — live demo</h1>
+  <p>Plain text / Markdown / BBCode / HTML</p>
+</header>
+
+<main>
+  <section class="controls">
+    <label
+      >From:
+      <select id="from">
+        <option>plaintext</option>
+        <option selected>markdown</option>
+        <option>bbcode</option>
+        <option>html</option>
+      </select>
+    </label>
+
+    <label
+      >To:
+      <select id="to">
+        <option>plaintext</option>
+        <option selected>html</option>
+        <option>markdown</option>
+        <option>bbcode</option>
+      </select>
+    </label>
+
+    <label><input type="checkbox" id="safe" checked /> Safe HTML</label>
+    <label><input type="checkbox" id="useAutolink" checked /> Plugin: autolink</label>
+    <label><input type="checkbox" id="useEmoji" /> Plugin: emoji</label>
+  </section>
+
+  <section class="panes">
+    <div class="pane">
+      <h3>Input</h3>
+      <textarea id="input" spellcheck="false">
+**hi** [link](https://example.com)
+See http://example.com :smile:</textarea
+      >
+    </div>
+    <div class="pane">
+      <h3>Output</h3>
+      <textarea id="output" spellcheck="false" readonly></textarea>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <p><a href="https://github.com/feather-tail/textxform">GitHub</a></p>
+</footer>
+
+<script type="module" src="./app.js"></script>
