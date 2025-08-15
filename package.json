@@ -17,7 +17,7 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "tsup src/index.js --format esm,cjs,iife --global-name textxform --minify --sourcemap --clean",
+    "build": "tsup src/index.js --format esm,cjs,iife --global-name=textxform --out-dir dist --clean",
     "dev": "tsup src/index.js --watch --format esm,cjs --sourcemap",
     "test": "vitest run",
     "coverage": "vitest run --coverage",
