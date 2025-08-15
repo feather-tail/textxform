@@ -1,5 +1,4 @@
-const api = await import('./dist/index.mjs').catch(() => import('./dist/index.js'));
-const { convert, use } = api;
+import { convert, use } from './dist/index.js';
 
 const autolink = {
   name: 'autolink-demo',

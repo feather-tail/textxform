@@ -31,7 +31,7 @@
     "ex:quick": "node examples/quick-start.mjs",
     "ex:api": "node examples/api-demo.mjs",
     "cli": "node bin/textxform.mjs --help",
-    "site:prep": "npm run build && rm -rf docs/dist && mkdir -p docs/dist && cp -r dist/* docs/dist/"
+    "site:prep": "npm run build && rm -rf docs/dist && mkdir -p docs/dist && cp -r dist/* docs/dist/ && if [ -f dist/index.mjs ]; then cp dist/index.mjs docs/dist/index.js; fi"
   },
   "lint-staged": {
     "*.{js,mjs,cjs,json,md}": [
