@@ -178,13 +178,8 @@ export function parseHTML(input = '') {
         const meta = { href, title, ...extractStyleMeta(attrs) };
         pushFrame('a', meta);
       },
-      span: () => {
-        pushFrame('span', extractStyleMeta(attrs));
-      },
-      font: () => {
-        pushFrame('font', extractStyleMeta(attrs));
-      },
-
+      span: () => pushFrame('span', extractStyleMeta(attrs)),
+      font: () => pushFrame('font', extractStyleMeta(attrs)),
       b: () => pushFrame('b', extractStyleMeta(attrs)),
       strong: () => pushFrame('strong', extractStyleMeta(attrs)),
       i: () => pushFrame('i', extractStyleMeta(attrs)),
@@ -193,8 +188,8 @@ export function parseHTML(input = '') {
       s: () => pushFrame('s', extractStyleMeta(attrs)),
       strike: () => pushFrame('strike', extractStyleMeta(attrs)),
       code: () => pushFrame('code'),
-
       p: () => pushFrame('p', extractStyleMeta(attrs)),
+      div: () => pushFrame('div', extractStyleMeta(attrs)),
       blockquote: () => pushFrame('blockquote', extractStyleMeta(attrs)),
       ul: () => pushFrame('ul', extractStyleMeta(attrs)),
       ol: () => pushFrame('ol', extractStyleMeta(attrs)),
@@ -219,7 +214,6 @@ export function parseHTML(input = '') {
         const kids = wrapByStyle(f.children, style);
         pushChild(link(href || '#', kids, title));
       },
-
       span: () => {
         const f = popToTag('span');
         if (!f) return;
@@ -232,8 +226,6 @@ export function parseHTML(input = '') {
         const kids = wrapByStyle(f.children, f.meta && f.meta.style);
         (kids.length === 1 ? [kids[0]] : kids).forEach(pushChild);
       },
-
-      // inline
       b: () => {
         const f = popToTag('b');
         if (f) pushChild(strong(wrapByStyle(f.children, f.meta?.style)));
@@ -266,11 +258,17 @@ export function parseHTML(input = '') {
         const f = popToTag('code');
         if (f) pushChild(inlineCode(getText(f.children)));
       },
-
-      // block
       p: () => {
         const f = popToTag('p');
-        if (f) pushChild(paragraph(wrapByStyle(f.children, f.meta?.style)));
+        if (!f) return;
+        const kids = wrapByStyle(f.children, f.meta?.style);
+        pushChild(paragraph(kids));
+      },
+      div: () => {
+        const f = popToTag('div');
+        if (!f) return;
+        const kids = wrapByStyle(f.children, f.meta?.style);
+        finalizeRoot(kids).forEach(pushChild);
       },
       blockquote: () => {
         const f = popToTag('blockquote');
@@ -332,7 +330,9 @@ export function parseHTML(input = '') {
 
   const appendText = (raw) => {
     const s = decodeEntities(raw);
-    if (s) pushChild(t(s));
+    if (!s) return;
+    if (top().tag === '#root' && !/\S/.test(s)) return;
+    pushChild(t(s));
   };
 
   let i = 0;
